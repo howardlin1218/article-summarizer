@@ -1,46 +1,87 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import json
+# import json
 from datetime import datetime
 import sys
 import signal
-import re
-import os
+# import re
 
-comma_splitter = re.compile(r'\s*\|\\s*')
+# comma_splitter = re.compile(r'\s*\|\\s*')
 now = datetime.now()
 d_year = now.year 
 d_month = now.month
 d_day = now.day
 # Import your existing modules
 try:
-    from methods import construct_message, json_dict, send_email, email_dict # Import your email automation
+    from methods import construct_message, json_dict, send_email, email_dict, is_valid_email # Import your email automation
     from search import search_all_sites  # Import your scraping logic
     from database import insert_to_supabase, get_recent_10_articles, populate_fields, search_for_articles, get_all_saved
 except ImportError:
     print("Warning: Could not import some modules. Make sure database.py, search.py, and methods.py exist.")
 
 app = Flask(__name__)
-CORS(app, origins=['https://article-summarizer-4lcw.onrender.com'], supports_credentials=True)  # Enable CORS for frontend communication 
-# CORS(app, origins=['http://127.0.0.1:5500'], supports_credentials=True)
+#CORS(app, origins=['https://www.summarizer.howard1218.site/'], supports_credentials=True)  # Enable CORS for frontend communication 
+CORS(app, origins=[
+    "http://127.0.0.1:5501", 
+    "https://www.summarizer.howard1218.site",
+    "https://summarizer.howard1218.site"
+], supports_credentials=True)
 @app.route('/api/email-to-user', methods=['POST'])
 def email_to_user():
     try:
-        email_html_content = ""
-        payload = json.loads(request.data.decode("utf-8"))
-        article_ids = payload.get("data")
+        payload = request.get_json()
+        if not payload:
+            return jsonify({"status": "error", "message": "Invalid JSON"}), 400
+        
+        article_ids = payload.get("data", [])
         email_address = payload.get("email_address")
+        
+        # 1. Check if the email field exists or is empty
+        if not email_address or email_address.strip() == "":
+            return jsonify({
+                "status": "error",
+                "message": "Email address is required."
+            }), 400 # 400 = Bad Request
+
+        # 2. Check if the format is actually an email
+        if not is_valid_email(email_address):
+            return jsonify({
+                "status": "error",
+                "message": "Please provide a valid email address."
+            }), 400
+
+        # 3. Check if there is actually data to send
+        if not article_ids:
+            return jsonify({
+                "status": "error",
+                "message": "No articles selected to summarize."
+            }), 400
+            
+        email_html_content = ""
+        
         for article_id in article_ids:
-            email_html_content += email_dict[article_id]
-        send_email(email_content_html=email_html_content, email_address="howlin1218@gmail.com", recipient_emails=email_address)
-        return jsonify({"status": "success", 
-                        "message": "email successfully sent"
-                        }), 200
+            content = email_dict.get(article_id, "<p>Article content not found.</p>")
+            email_html_content += content
+        
+        success = send_email(email_content_html=email_html_content, recipient_emails=email_address)
+        
+        if success:
+            return jsonify({
+                "status": "success", 
+                "message": "email successfully sent"
+            }), 200
+        else:
+            # This catches cases where Resend rejected the API key or domain
+            return jsonify({
+                "status": "sending error",
+                "message": "The email provider rejected the request."
+            }), 502 # 502 means Bad Gateway (problem with the 3rd party service)
+            
     except Exception as e:
-        print(str(e))
+        print(f"Server Error: {str(e)}")
         return jsonify({
-            'status': 'saving error',
-            'message': str(e)
+            'status': 'sending error',
+            'message': 'Server error: ' + str(e)
         }), 500
     
 @app.route('/api/save-to-database', methods=['POST'])
@@ -70,12 +111,12 @@ def search_site():
         websites = [int(x) for x in data.get('websites', ["0"])]
         search_terms = data.get('searchTerms', "MSI")
         limit = data.get('limit', 1)
-        day_from = data.get('day_from', 0)
-        month_from = data.get('month_from', 0)
-        year_from = data.get('year_from', 0)
-        day_to = data.get('day_to', 0)
-        month_to = data.get('month_to', 0)
-        year_to = data.get('year_to', 0)
+        day_from = data.get('day_from', 1)
+        month_from = data.get('month_from', 1)
+        year_from = data.get('year_from', 2025)
+        day_to = data.get('day_to', d_day)
+        month_to = data.get('month_to', d_month)
+        year_to = data.get('year_to', d_year)
         keywords = data.get('keywords', "")
 
         # print("day from: ", day_from)
@@ -243,7 +284,7 @@ signal.signal(signal.SIGINT, graceful_shutdown)  # Ctrl+C
 signal.signal(signal.SIGTERM, graceful_shutdown)
 
 if __name__ == '__main__':
-    populate_fields()
-    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    #populate_fields()
+    # app.run(debug=False, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
 
-    # app.run(debug=True, host='127.0.0.1', port=5000) 
+    app.run(debug=True, host='127.0.0.1', port=5000) 

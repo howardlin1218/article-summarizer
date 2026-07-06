@@ -38,9 +38,9 @@ interface ApiResponse {
 }
 
 // API Configuration
-const API_BASE_URL = 'https://article-summarizer-backend-wr47.onrender.com/api';
+// const API_BASE_URL = 'https://www.summarizer.howard1218.site/api';
 
-// const API_BASE_URL = 'http://127.0.0.1:5000/api'
+const API_BASE_URL = 'http://127.0.0.1:5000/api'
 async function makeApiRequest_recent(endpoint: string): Promise<ApiResponse> {
     const url = `${API_BASE_URL}${endpoint}`;
     console.log(url)
@@ -325,12 +325,12 @@ function getSiteSearchValues(): SearchValues {
         websites: websites || ["0"],
         searchTerms: (document.getElementById('search') as HTMLInputElement)?.value || "MSI",
         limit: Number((document.getElementById('amount') as HTMLInputElement)?.value) || 1,
-        day_from: Number((document.getElementById('site-day-from') as HTMLSelectElement)?.value) || 0,
-        month_from: Number((document.getElementById('site-month-from') as HTMLSelectElement)?.value) || 0,
-        year_from: Number((document.getElementById('site-year-from') as HTMLSelectElement)?.value) || 0,
-        day_to: Number((document.getElementById('site-day-to') as HTMLSelectElement)?.value) || 0,
-        month_to: Number((document.getElementById('site-month-to') as HTMLSelectElement)?.value) || 0,
-        year_to: Number((document.getElementById('site-year-to') as HTMLSelectElement)?.value) || 0,
+        day_from: Number((document.getElementById('site-day-from') as HTMLSelectElement)?.value) || 1,
+        month_from: Number((document.getElementById('site-month-from') as HTMLSelectElement)?.value) || 1,
+        year_from: Number((document.getElementById('site-year-from') as HTMLSelectElement)?.value) || 2025,
+        day_to: Number((document.getElementById('site-day-to') as HTMLSelectElement)?.value) || n_day,
+        month_to: Number((document.getElementById('site-month-to') as HTMLSelectElement)?.value) || n_month,
+        year_to: Number((document.getElementById('site-year-to') as HTMLSelectElement)?.value) || n_year,
         keywords: (document.getElementById('keywords') as HTMLInputElement)?.value || ""
     };
 }

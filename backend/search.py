@@ -5,8 +5,12 @@ from collections import defaultdict
 import re
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
+import base64
 
-now = datetime.now()
+pacific_tz = ZoneInfo("America/Los_Angeles")
+
+now = datetime.now(pacific_tz)
 year = now.year 
 month = now.month
 day = now.day
@@ -102,6 +106,42 @@ kws = []
 # parse dates
 splitter = re.compile(r"[ /,]+")
 
+def parse_to_datetime(element):
+    """
+    Decodes Base64 if present, otherwise uses text, 
+    then converts to a comparable datetime object.
+    """
+    if not element:
+        return None, 'unknown'
+
+    # 1. Prioritize the Base64 attribute
+    raw_str = ""
+    if element.has_attr("data-b64-ts"):
+        try:
+            b64_data = element["data-b64-ts"]
+            raw_str = base64.b64decode(b64_data).decode("utf-8").lower().strip()
+        except Exception:
+            raw_str = element.get_text(strip=True).lower()
+    else:
+        raw_str = element.get_text(strip=True).lower()
+
+    if not raw_str:
+        return None, 'unknown'
+
+    # 2. Handle "ago" logic (always included in range)
+    if 'ago' in raw_str:
+        return datetime.now(ZoneInfo("America/Los_Angeles")), raw_str
+    
+    # 3. Handle specific date formats
+    for fmt in ("%b %d, %Y", "%B %d, %Y"):
+        try:
+            dt_obj = datetime.strptime(raw_str, fmt)
+            return dt_obj.replace(tzinfo=pacific_tz), raw_str
+        except ValueError:
+            continue
+            
+    return None, 'unknown'
+    
 def match_keywords(article_text):
     if not kws:
         return ["no keywords"]
@@ -627,60 +667,76 @@ def search_gamerant(website_url=website_urls[5], search_terms=search_terms, arti
         params = {"q": search_terms[term]}
 
         response = requests.get(website_url, params=params, headers=headers)
-        #print("Search URL:", response.url)
+        # print("Search URL:", response.url)
     
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
-
+            # print("successful search")
             # get all the articles in one container
             results_container = soup.find("section", class_="listing-content")
             if results_container is None: 
                 print(f"GR Results No results for {search_terms[term]}")
                 continue
-
             # separate the individual articles from the container and store in new container
             articles = results_container.find_all("div", class_="article")
             if not articles: 
                 print(f"GR Articles No results for {search_terms[term]}\n")
                 continue
-            
+            # print(articles)
             at_least_one_article = False
+            
             for article in articles:  
-                m_day = day
-                m_month = month
-                m_year = year
+                # m_day = day
+                # m_month = month
+                # m_year = year
+                
+                start_date = datetime(year_from, month_from, day_from, tzinfo=pacific_tz)
+                end_date = datetime(year_to, month_to, day_to, 23, 59, 59, tzinfo=pacific_tz)
+                
+                # print(f"i: {i}, article limit: {article_limit}, articles: {len(articles)}, i < article_limit: {i < article_limit}")
+                
                 if i < article_limit:
                     # get the link tag <a>
                     author = article.find("a", rel="author").get_text(strip=True)
                     a_tag = article.find("a", class_=False, id=False)
                     link = "https://gamerant.com" + a_tag.get("href")
                     title = a_tag.get_text(strip=True)
-                    publish_date = article.find("time", class_="display-card-date").get_text(strip=True)
-                    parsed_date = splitter.split(publish_date)
-                    if parsed_date[-1] != 'ago': 
-                        if int(parsed_date[-1]) < year_from:
+                    
+                    # publish_date = article.find("span", class_="display-card-date").get_text(strip=True)
+                    # parsed_date = splitter.split(publish_date)
+                    
+                    date_element = article.find("span", class_="display-card-date")
+                    article_dt, publish_date = parse_to_datetime(date_element)
+                    if article_dt:
+                        # Range check (start_date and end_date defined earlier)
+                        if not (start_date <= article_dt <= end_date):
+                            # print(f"start_date: {start_date}, article_dt: {article_dt}, end_date: {end_date}")
                             continue
-                        if int(parsed_date[-1]) == year_from:
-                            if months[parsed_date[0].lower()] < month_from:
-                                continue
-                        if int(parsed_date[-1]) == year_from:
-                            if months[parsed_date[0].lower()] == month_from:
-                                if int(parsed_date[1]) < day_from:
-                                    continue
+                    
+                    # if parsed_date[-1] != 'ago': 
+                    #     if int(parsed_date[-1]) < year_from:
+                    #         continue
+                    #     if int(parsed_date[-1]) == year_from:
+                    #         if months[parsed_date[0].lower()] < month_from:
+                    #             continue
+                    #     if int(parsed_date[-1]) == year_from:
+                    #         if months[parsed_date[0].lower()] == month_from:
+                    #             if int(parsed_date[1]) < day_from:
+                    #                 continue
 
-                    if parsed_date[-1] != 'ago': 
-                        if int(parsed_date[-1]) > year_to and year_to != 0:
-                            continue
-                        if int(parsed_date[-1]) == year_to:
-                            if months[parsed_date[0].lower()] > month_to and month_to != 0:
-                                continue
-                        if int(parsed_date[-1]) == year_to:
-                            if months[parsed_date[0].lower()] == month_to:
-                                if int(parsed_date[1]) > day_to and day_to != 0:
-                                    continue
-                        m_day = int(parsed_date[1])
-                        m_month = months[parsed_date[0].lower()]
-                        m_year = int(parsed_date[-1])
+                    # if parsed_date[-1] != 'ago': 
+                    #     if int(parsed_date[-1]) > year_to and year_to != 0:
+                    #         continue
+                    #     if int(parsed_date[-1]) == year_to:
+                    #         if months[parsed_date[0].lower()] > month_to and month_to != 0:
+                    #             continue
+                    #     if int(parsed_date[-1]) == year_to:
+                    #         if months[parsed_date[0].lower()] == month_to:
+                    #             if int(parsed_date[1]) > day_to and day_to != 0:
+                    #                 continue
+                    #     m_day = int(parsed_date[1])
+                    #     m_month = months[parsed_date[0].lower()]
+                    #     m_year = int(parsed_date[-1])
 
                     current_article_text = ""
                     response = requests.get(link, headers=headers)
@@ -697,7 +753,7 @@ def search_gamerant(website_url=website_urls[5], search_terms=search_terms, arti
                             continue
                         matched = match_keywords(current_article_text)
                         if len(matched) != 0:
-                            publish_date_formatted = f"{m_year}-{m_month:02}-{m_day:02}"
+                            publish_date_formatted = f"{article_dt.year}-{article_dt.month:02}-{article_dt.day:02}"
                             matched_article_metadata[link] = [current_article_text, 
                                                         matched, 
                                                         title, 

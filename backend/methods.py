@@ -1,17 +1,13 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import resend
 import os 
 from dotenv import load_dotenv
 from groq import Groq
+import re
 
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
-
+resend.api_key = os.getenv("RESEND_APIKEY")
 client = Groq(api_key=api_key)
-
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")  # Not your normal password!
 SEPARATOR = ""
 
 results_list = None
@@ -141,7 +137,6 @@ def construct_message(email_content=email_content, results_list=results_list, ke
             
             # for database
             json_dict[article_url] = {"website": website_urls[website_url], "title": metadata[2], "author": metadata[3], "published": metadata[4], "keywords": (", ".join(metadata[1]) if metadata[1] else ""), "url": article_url, "content": current_article_html, "published_date": metadata[5]}
-
             # full article list html - for email
             partial_email_html += current_article_html
             
@@ -151,18 +146,29 @@ def save_to_file(email_content_html):
     with open("summaries.html", "w", encoding="utf-8") as file:
             file.write(email_content_html)
 
-def send_email(email_content_html, email_address, recipient_emails):
-    msg = MIMEMultipart("alternative")
-    msg['Subject'] = "Article Summary"
-    msg['From'] = email_address
-    msg['To'] = ", ".join(recipient_emails)
-    msg.attach(MIMEText(email_content_html, "html"))
+def send_email(email_content_html, recipient_emails):
+    try:
+        # Use a list for multiple recipients
+        if isinstance(recipient_emails, str):
+            recipient_emails = [recipient_emails]
 
-    # Connect using TLS
-    with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-        smtp.ehlo()           # Identify ourselves to the SMTP server
-        smtp.starttls()       # Start TLS encryption
-        smtp.ehlo()           # Re-identify after starting TLS (optional but good practice)
-        smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        smtp.sendmail(msg['From'], recipient_emails, msg.as_string())
-    print("email successfully sent!")
+        params = {
+            "from": "Article Summarizer <summaries@howard1218.site>", # Use your verified domain
+            "to": recipient_emails,
+            "subject": "Your Article Summaries",
+            "html": email_content_html,
+        }
+
+        # This is a single HTTPS POST request—no ports to block!
+        response = resend.Emails.send(params)
+        print(f"Email sent successfully! ID: {response['id']}")
+        return True
+
+    except Exception as e:
+        print(f"Resend Error: {e}")
+        return False
+    
+def is_valid_email(email):
+    # A simple regex to check for @ and .
+    regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    return re.match(regex, email) is not None

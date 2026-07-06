@@ -4,8 +4,8 @@ const n_year = now.getFullYear();
 const n_month = now.getMonth() + 1;
 const n_day = now.getDate();
 // API Configuration
-const API_BASE_URL = 'https://article-summarizer-backend-wr47.onrender.com/api';
-// const API_BASE_URL = 'http://127.0.0.1:5000/api'
+// const API_BASE_URL = 'https://www.summarizer.howard1218.site/api';
+const API_BASE_URL = 'http://127.0.0.1:5000/api';
 async function makeApiRequest_recent(endpoint) {
     const url = `${API_BASE_URL}${endpoint}`;
     console.log(url);
@@ -270,12 +270,12 @@ function getSiteSearchValues() {
         websites: websites || ["0"],
         searchTerms: ((_a = document.getElementById('search')) === null || _a === void 0 ? void 0 : _a.value) || "MSI",
         limit: Number((_b = document.getElementById('amount')) === null || _b === void 0 ? void 0 : _b.value) || 1,
-        day_from: Number((_c = document.getElementById('site-day-from')) === null || _c === void 0 ? void 0 : _c.value) || 0,
-        month_from: Number((_d = document.getElementById('site-month-from')) === null || _d === void 0 ? void 0 : _d.value) || 0,
-        year_from: Number((_e = document.getElementById('site-year-from')) === null || _e === void 0 ? void 0 : _e.value) || 0,
-        day_to: Number((_f = document.getElementById('site-day-to')) === null || _f === void 0 ? void 0 : _f.value) || 0,
-        month_to: Number((_g = document.getElementById('site-month-to')) === null || _g === void 0 ? void 0 : _g.value) || 0,
-        year_to: Number((_h = document.getElementById('site-year-to')) === null || _h === void 0 ? void 0 : _h.value) || 0,
+        day_from: Number((_c = document.getElementById('site-day-from')) === null || _c === void 0 ? void 0 : _c.value) || 1,
+        month_from: Number((_d = document.getElementById('site-month-from')) === null || _d === void 0 ? void 0 : _d.value) || 1,
+        year_from: Number((_e = document.getElementById('site-year-from')) === null || _e === void 0 ? void 0 : _e.value) || 2025,
+        day_to: Number((_f = document.getElementById('site-day-to')) === null || _f === void 0 ? void 0 : _f.value) || n_day,
+        month_to: Number((_g = document.getElementById('site-month-to')) === null || _g === void 0 ? void 0 : _g.value) || n_month,
+        year_to: Number((_h = document.getElementById('site-year-to')) === null || _h === void 0 ? void 0 : _h.value) || n_year,
         keywords: ((_j = document.getElementById('keywords')) === null || _j === void 0 ? void 0 : _j.value) || ""
     };
 }
