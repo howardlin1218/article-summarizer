@@ -1,28 +1,46 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
-# import json
+import os
+from dotenv import load_dotenv
+import uuid
 from datetime import datetime
 import sys
 import signal
-# import re
+
+try:
+    from methods import construct_message, send_email, is_valid_email, construct_message_gemini, is_safe_and_relevant_prompt # Import your email automation
+    from search import search_all_sites  # Import your scraping logic
+    from database import insert_to_supabase, get_recent_10_articles, search_for_articles, get_all_saved
+except ImportError:
+    print("Warning: Could not import some modules. Make sure database.py, search.py, and methods.py exist.")
+# User-specific dictionaries keyed by session ID
+session_json_dicts = {}
+session_email_dicts = {}
+
+def get_user_session_id():
+    if 'user_session_id' not in session:
+        session['user_session_id'] = str(uuid.uuid4())
+    return session['user_session_id']
+
 
 # comma_splitter = re.compile(r'\s*\|\\s*')
 now = datetime.now()
 d_year = now.year 
 d_month = now.month
 d_day = now.day
-# Import your existing modules
-try:
-    from methods import construct_message, json_dict, send_email, email_dict, is_valid_email # Import your email automation
-    from search import search_all_sites  # Import your scraping logic
-    from database import insert_to_supabase, get_recent_10_articles, populate_fields, search_for_articles, get_all_saved
-except ImportError:
-    print("Warning: Could not import some modules. Make sure database.py, search.py, and methods.py exist.")
+
+load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.getenv("FLASK_SECRET_KEY")
+is_prod = os.getenv("FLASK_ENV") == "production"
+app.config.update(
+    SESSION_COOKIE_SECURE=is_prod,
+    SESSION_COOKIE_SAMESITE='Lax'
+)
 #CORS(app, origins=['https://www.summarizer.howard1218.site/'], supports_credentials=True)  # Enable CORS for frontend communication 
 CORS(app, origins=[
-    "http://127.0.0.1:5501", 
+    "http://127.0.0.1:5500",
     "https://www.summarizer.howard1218.site",
     "https://summarizer.howard1218.site"
 ], supports_credentials=True)
@@ -57,10 +75,13 @@ def email_to_user():
                 "message": "No articles selected to summarize."
             }), 400
             
+        user_id = get_user_session_id()
+        user_email_dict = session_email_dicts.setdefault(user_id, {})
+
         email_html_content = ""
         
         for article_id in article_ids:
-            content = email_dict.get(article_id, "<p>Article content not found.</p>")
+            content = user_email_dict.get(article_id, "<p>Article content not found.</p>")
             email_html_content += content
         
         success = send_email(email_content_html=email_html_content, recipient_emails=email_address)
@@ -88,9 +109,11 @@ def email_to_user():
 def save_to_database():
     try:
         payload = request.get_json()
-        article_ids = payload.get("data")
-        list_of_json_data = [json_dict[article_id] for article_id in article_ids]
-        insert_to_supabase(list_of_json_data)
+        user_id = get_user_session_id()
+        user_json_dict = session_json_dicts.setdefault(user_id, {})
+        list_of_json_data = [user_json_dict[article_id] for article_id in article_ids if article_id in user_json_dict]
+        if list_of_json_data:
+            insert_to_supabase(list_of_json_data)
         return jsonify({"status": "success", 
                         "message": "saved successfully to database"
                         }), 200
@@ -100,6 +123,8 @@ def save_to_database():
             'status': 'saving error',
             'message': str(e)
         }), 500
+
+
     
 @app.route('/api/search-site', methods=['POST'])
 def search_site():
@@ -118,6 +143,13 @@ def search_site():
         month_to = data.get('month_to', d_month)
         year_to = data.get('year_to', d_year)
         keywords = data.get('keywords', "")
+        custom_prompt = data.get('customPrompt', "")
+
+        if custom_prompt and not is_safe_and_relevant_prompt(custom_prompt):
+            return jsonify({
+                "status": "error",
+                "message": "Inappropriate or irrelevant custom prompt. Your prompt must be strictly related to summarizing, analyzing, or processing text from the articles."
+            }), 400
 
         # print("day from: ", day_from)
         # print("month from: ", month_from)
@@ -141,8 +173,13 @@ def search_site():
         print(f"Site search request: {search_terms} on {len(websites)} websites: {websites}, limit:{limit}")
         results_list = search_all_sites(search_terms=search_terms, article_limit=limit, year_from=year_from, month_from=month_from, day_from=day_from, year_to=year_to, month_to=month_to, day_to=day_to, sites_to_search=websites, keywords=keywords)
                 
-        return_str = construct_message(results_list=results_list)
-        #save_to_file(return_str)
+        user_id = get_user_session_id()
+        user_json_dict = session_json_dicts.setdefault(user_id, {})
+        user_email_dict = session_email_dicts.setdefault(user_id, {})
+
+        # return_str = construct_message_gemini(results_list=results_list, custom_prompt=custom_prompt, json_dict=user_json_dict, email_dict=user_email_dict)
+        return_str = construct_message(results_list=results_list, custom_prompt=custom_prompt, json_dict=user_json_dict, email_dict=user_email_dict)
+        
         return jsonify({"status": "success", 
                         "message": "returning json",
                         "html": return_str
@@ -159,11 +196,13 @@ def search_site():
 def get_recent_articles():
     try:
         response = get_recent_10_articles()
+        user_id = get_user_session_id()
+        user_email_dict = session_email_dicts.setdefault(user_id, {})
         for dict in response: 
             input_tag = f"<input value='{dict['url']}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n"
             for_email_html = dict['content'].replace(input_tag, "")
 
-            email_dict[dict['url']] = for_email_html
+            user_email_dict[dict['url']] = for_email_html
 
         return jsonify({"status": "success", 
                         "message": "got 10 most recent articles saved",
@@ -180,11 +219,13 @@ def get_recent_articles():
 def get_all_saved_articles():
     try:
         response = get_all_saved()
+        user_id = get_user_session_id()
+        user_email_dict = session_email_dicts.setdefault(user_id, {})
         for dict in response: 
             input_tag = f"<input value='{dict['url']}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n"
             for_email_html = dict['content'].replace(input_tag, "")
 
-            email_dict[dict['url']] = for_email_html
+            user_email_dict[dict['url']] = for_email_html
 
         return jsonify({"status": "success", 
                         "message": "got all saved articles",
@@ -255,6 +296,14 @@ def search_database():
         # Log the search request
         print(f"Database search request: matching titles with {search_terms} with limit of {limit}")
         response = search_for_articles(websites, search_terms, limit, keywords, urls, start_date, end_date)
+        
+        user_id = get_user_session_id()
+        user_email_dict = session_email_dicts.setdefault(user_id, {})
+        for dict in response: 
+            input_tag = f"<input value='{dict['url']}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n"
+            for_email_html = dict['content'].replace(input_tag, "")
+            user_email_dict[dict['url']] = for_email_html
+
         # Here you can integrate with your existing database functions
         return jsonify({"status": "success", 
                         "message": "returning json",
@@ -277,7 +326,11 @@ def health_check():
     })
 
 def graceful_shutdown(sig, frame):
-    insert_to_supabase(list(json_dict.values()))
+    all_articles = []
+    for user_dict in session_json_dicts.values():
+        all_articles.extend(user_dict.values())
+    if all_articles:
+        insert_to_supabase(all_articles)
     sys.exit(0)
 
 signal.signal(signal.SIGINT, graceful_shutdown)  # Ctrl+C

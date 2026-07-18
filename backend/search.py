@@ -1,12 +1,54 @@
 import requests 
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 from collections import defaultdict
+
 import re
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import base64
+
+def extract_link_preview_metadata(soup, url):
+    """
+    Extracts thumbnail URL and description from the article's BeautifulSoup object.
+    """
+    thumbnail_url = None
+    description = None
+
+    # 1. Try og:image
+    og_image = soup.find("meta", property="og:image") or soup.find("meta", attrs={"name": "og:image"})
+    if og_image and og_image.get("content"):
+        thumbnail_url = og_image["content"]
+
+    # 2. Try twitter:image
+    if not thumbnail_url:
+        twitter_image = soup.find("meta", name="twitter:image") or soup.find("meta", attrs={"property": "twitter:image"})
+        if twitter_image and twitter_image.get("content"):
+            thumbnail_url = twitter_image["content"]
+
+    # 3. Handle relative image URLs
+    if thumbnail_url:
+        thumbnail_url = urljoin(url, thumbnail_url)
+
+    # 4. Try og:description
+    og_desc = soup.find("meta", property="og:description") or soup.find("meta", attrs={"name": "og:description"})
+    if og_desc and og_desc.get("content"):
+        description = og_desc["content"]
+
+    # 5. Try meta description
+    if not description:
+        meta_desc = soup.find("meta", name="description") or soup.find("meta", attrs={"property": "description"})
+        if meta_desc and meta_desc.get("content"):
+            description = meta_desc["content"]
+
+    if description:
+        description = description.strip()
+        if len(description) > 200:
+            description = description[:197] + "..."
+
+    return thumbnail_url, description
 
 pacific_tz = ZoneInfo("America/Los_Angeles")
 
@@ -94,7 +136,7 @@ months = {
 headers = {"User-Agent": "Chrome/114.0.0.0 Safari/537.36"}
 
 # pattern = ""
-kws = []
+# kws = []
 # def keywords_pattern(keywords):
 #     if len(keywords) == 0:
 #         return ""
@@ -142,7 +184,7 @@ def parse_to_datetime(element):
             
     return None, 'unknown'
     
-def match_keywords(article_text):
+def match_keywords(article_text, kws):
     if not kws:
         return ["no keywords"]
     
@@ -154,7 +196,7 @@ def match_keywords(article_text):
             return []
     return found
 
-def search_toms_hardware(website_url=website_urls[0], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day): 
+def search_toms_hardware(website_url=website_urls[0], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day, keywords=[]): 
     matched_article_metadata = defaultdict(list)
     for term in range(len(search_terms)):
         i = 0
@@ -233,15 +275,18 @@ def search_toms_hardware(website_url=website_urls[0], search_terms=search_terms,
                         # print(len(current_article_text.lower().split()))
                         if len(current_article_text.lower().split()) > word_limit:
                             continue
-                        matched = match_keywords(current_article_text)
+                        matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
                             publish_date_formatted = f"{m_year}-{m_month:02}-{m_day:02}"
+                            thumbnail_url, description = extract_link_preview_metadata(opened_article, link)
                             matched_article_metadata[link] = [current_article_text, 
                                                               matched, 
                                                               title, 
                                                               author, 
                                                               publish_date,
-                                                              publish_date_formatted]
+                                                              publish_date_formatted,
+                                                              thumbnail_url,
+                                                              description]
                             i += 1
                             at_least_one_article = True
                     else:
@@ -264,7 +309,7 @@ def search_toms_hardware(website_url=website_urls[0], search_terms=search_terms,
     # figure out how to send these as notifications to emails, and how to save to database for future reference 
     # allow user lookup in the database 
 
-def search_pc_mag(website_url=website_urls[1], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day):
+def search_pc_mag(website_url=website_urls[1], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day, keywords=[]):
     matched_article_metadata = {}
     for term in range(len(search_terms)):
         i = 0
@@ -349,15 +394,18 @@ def search_pc_mag(website_url=website_urls[1], search_terms=search_terms, articl
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
                         if len(current_article_text.lower().split()) > word_limit:
                             continue
-                        matched = match_keywords(current_article_text)
+                        matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
                             publish_date_formatted = f"{m_year}-{m_month:02}-{m_day:02}"
+                            thumbnail_url, description = extract_link_preview_metadata(opened_article, link)
                             matched_article_metadata[link] = [current_article_text, 
                                                             matched, 
                                                             title,
                                                             author,
                                                             publish_date,
-                                                            publish_date_formatted]
+                                                            publish_date_formatted,
+                                                            thumbnail_url,
+                                                            description]
                             i += 1
                             at_least_one_article = True
                     else:
@@ -372,7 +420,7 @@ def search_pc_mag(website_url=website_urls[1], search_terms=search_terms, articl
             pass
     return matched_article_metadata
 
-def search_the_pc_enthusiast(website_url=website_urls[2], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day):
+def search_the_pc_enthusiast(website_url=website_urls[2], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day, keywords=[]):
     matched_article_metadata = {}
     for term in range(len(search_terms)):
         i = 0
@@ -448,15 +496,18 @@ def search_the_pc_enthusiast(website_url=website_urls[2], search_terms=search_te
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
                         if len(current_article_text.lower().split()) > word_limit:
                             continue
-                        matched = match_keywords(current_article_text)
+                        matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
                             publish_date_formatted = f"{m_year}-{m_month:02}-{m_day:02}"
+                            thumbnail_url, description = extract_link_preview_metadata(opened_article, link)
                             matched_article_metadata[link] = [current_article_text,
                                                         matched,
                                                         title,
                                                         author,
                                                         publish_date,
-                                                        publish_date_formatted]
+                                                        publish_date_formatted,
+                                                        thumbnail_url,
+                                                        description]
                             i += 1
                             at_least_one_article = True
                     else:
@@ -470,7 +521,7 @@ def search_the_pc_enthusiast(website_url=website_urls[2], search_terms=search_te
             print(f"Failed to fetch results for {search_terms[term]} (status code: {response.status_code})")
     return matched_article_metadata
 
-def search_hothardware(website_url=website_urls[3], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day):
+def search_hothardware(website_url=website_urls[3], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day, keywords=[]):
     matched_article_metadata = {}
     for term in range(len(search_terms)):
         i = 0
@@ -541,15 +592,18 @@ def search_hothardware(website_url=website_urls[3], search_terms=search_terms, a
                             break
                         if len(current_article_text.lower().split()) > word_limit:
                             continue
-                        matched = match_keywords(current_article_text)
+                        matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
                             publish_date_formatted = f"{m_year}-{m_month:02}-{m_day:02}"
+                            thumbnail_url, description = extract_link_preview_metadata(opened_article, link)
                             matched_article_metadata[link] = [current_article_text, 
                                                         matched, 
                                                         title, 
                                                         author, 
                                                         publish_date,
-                                                        publish_date_formatted]
+                                                        publish_date_formatted,
+                                                        thumbnail_url,
+                                                        description]
                             i += 1
                             at_least_one_article = True
                     else:
@@ -563,7 +617,7 @@ def search_hothardware(website_url=website_urls[3], search_terms=search_terms, a
             print(f"Failed to fetch results for {search_terms[term]} (status code: {response.status_code})")
     return matched_article_metadata
 
-def search_pc_perspective(website_url=website_urls[4], search_terms=search_terms, article_limit=1, word_limit = 500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day):
+def search_pc_perspective(website_url=website_urls[4], search_terms=search_terms, article_limit=1, word_limit = 500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day, keywords=[]):
     matched_article_metadata = {}
     for term in range(len(search_terms)):
         i = 0
@@ -638,15 +692,18 @@ def search_pc_perspective(website_url=website_urls[4], search_terms=search_terms
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
                         if len(current_article_text.lower().split()) > word_limit:
                             continue
-                        matched = match_keywords(current_article_text)
+                        matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
                             publish_date_formatted = f"{m_year}-{m_month:02}-{m_day:02}"
+                            thumbnail_url, description = extract_link_preview_metadata(opened_article, link)
                             matched_article_metadata[link] = [current_article_text, 
                                                         matched, 
                                                         title, 
                                                         author, 
                                                         publish_date,
-                                                        publish_date_formatted]
+                                                        publish_date_formatted,
+                                                        thumbnail_url,
+                                                        description]
                             i += 1
                             at_least_one_article = True
                     else:
@@ -660,7 +717,7 @@ def search_pc_perspective(website_url=website_urls[4], search_terms=search_terms
             print(f"Failed to fetch results for {search_terms[term]} (status code: {response.status_code})")
     return matched_article_metadata
 
-def search_gamerant(website_url=website_urls[5], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day):
+def search_gamerant(website_url=website_urls[5], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day, keywords=[]):
     matched_article_metadata = {}
     for term in range(len(search_terms)):
         i = 0
@@ -751,15 +808,18 @@ def search_gamerant(website_url=website_urls[5], search_terms=search_terms, arti
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
                         if len(current_article_text.lower().split()) > word_limit:
                             continue
-                        matched = match_keywords(current_article_text)
+                        matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
                             publish_date_formatted = f"{article_dt.year}-{article_dt.month:02}-{article_dt.day:02}"
+                            thumbnail_url, description = extract_link_preview_metadata(opened_article, link)
                             matched_article_metadata[link] = [current_article_text, 
                                                         matched, 
                                                         title, 
                                                         author, 
                                                         publish_date,
-                                                        publish_date_formatted]
+                                                        publish_date_formatted,
+                                                        thumbnail_url,
+                                                        description]
                             i += 1
                             at_least_one_article = True
                     else:
@@ -773,7 +833,7 @@ def search_gamerant(website_url=website_urls[5], search_terms=search_terms, arti
             print(f"Failed to fetch results for {search_terms[term]} (status code: {response.status_code})")
     return matched_article_metadata
 
-def search_windows_central(website_url=website_urls[6], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day):
+def search_windows_central(website_url=website_urls[6], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day, keywords=[]):
     matched_article_metadata = {}
     for term in range(len(search_terms)):
         i = 0
@@ -850,15 +910,18 @@ def search_windows_central(website_url=website_urls[6], search_terms=search_term
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
                         if len(current_article_text.lower().split()) > word_limit:
                             continue
-                        matched = match_keywords(current_article_text)
+                        matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
                             publish_date_formatted = f"{m_year}-{m_month:02}-{m_day:02}"
+                            thumbnail_url, description = extract_link_preview_metadata(opened_article, link)
                             matched_article_metadata[link] = [current_article_text, 
                                                         matched, 
                                                         title, 
                                                         author, 
                                                         publish_date,
-                                                        publish_date_formatted]
+                                                        publish_date_formatted,
+                                                        thumbnail_url,
+                                                        description]
                             i += 1
                             at_least_one_article = True
                     else:
@@ -872,7 +935,7 @@ def search_windows_central(website_url=website_urls[6], search_terms=search_term
             print(f"Failed to fetch results for {search_terms[term]} (status code: {response.status_code})")
     return matched_article_metadata
 
-def search_tech_radar(website_url=website_urls[7], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day):
+def search_tech_radar(website_url=website_urls[7], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day, keywords=[]):
     matched_article_metadata = {}
     for term in range(len(search_terms)):
         i = 0
@@ -949,15 +1012,18 @@ def search_tech_radar(website_url=website_urls[7], search_terms=search_terms, ar
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
                         if len(current_article_text.lower().split()) > word_limit:
                             continue
-                        matched = match_keywords(current_article_text)
+                        matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
                             publish_date_formatted = f"{m_year}-{m_month:02}-{m_day:02}"
+                            thumbnail_url, description = extract_link_preview_metadata(opened_article, link)
                             matched_article_metadata[link] = [current_article_text, 
                                                         matched, 
                                                         title, 
                                                         author, 
                                                         publish_date,
-                                                        publish_date_formatted]
+                                                        publish_date_formatted,
+                                                        thumbnail_url,
+                                                        description]
                             i += 1
                             at_least_one_article = True
                     else:
@@ -981,25 +1047,12 @@ search_functions = [search_toms_hardware,
                     search_tech_radar]
 
 def search_all_sites(website_urls=website_urls, search_terms=search_terms, article_limit=1, word_limit=7500, year_from=year, month_from=month, day_from=day , day_to=day, month_to=month, year_to=year, sites_to_search=[0], keywords=[]):
-    # global pattern 
-    global kws
-    # pattern = keywords_pattern(keywords)
-    kws = keywords
+    # global kws
+    # kws = keywords
     i = 0
     return_list = {}
     for website_url in website_urls:
         if i in sites_to_search:
-            return_list[website_url] = search_functions[i](website_url, search_terms, article_limit, word_limit, year_from, month_from, day_from, year_to,month_to, day_to)
+            return_list[website_url] = search_functions[i](website_url, search_terms, article_limit, word_limit, year_from, month_from, day_from, year_to, month_to, day_to, keywords=keywords)
         i += 1
-        # site_data = search_functions[i](website_url, search_terms, article_limit, word_limit) # returns a dict, see below for structure
-        # site_data = {"article link": ["article text", ["article keywords"], "article title", "article author(s)", "article publish date"], 
-        #              "article link": ["article text", ["article keywords"], "article title", "article author(s)", "article publish date"], 
-        #               ...more links...}
-        # result_list = {"website link":{"article link": ["article text", ["article keywords"], "article title", "article author(s)", "article publish date"],
-        #                           "article link": ["article text", ["article keywords"], "article title", "article author(s)", "article publish date"],
-        #                            ...more links...}, 
-        #                "website link": {....}, 
-        #                ...}
-        # site_data = dict[article link] = [list]
-        # result_list = dict[website link] = (dict[article link] = [list])
     return return_list

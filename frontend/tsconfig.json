@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2017",             // or "ES2015", "ES2020", etc.
-    "lib": ["DOM", "ES2017"],       // must include at least "ES2015" or later
-    "module": "ES6",                // or "CommonJS" if you're not targeting browser
+    "target": "ES2017",
+    "lib": ["DOM", "DOM.Iterable", "ES2017"],  // Added DOM.Iterable here
+    "module": "ES6",
     "strict": true,
     "esModuleInterop": true
   }

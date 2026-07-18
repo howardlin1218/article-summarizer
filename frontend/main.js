@@ -14,7 +14,8 @@ async function makeApiRequest_recent(endpoint) {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
-            }
+            },
+            credentials: 'include'
         });
         return await response.json();
     }
@@ -34,7 +35,8 @@ async function makeApiRequest_send(endpoint, data, email_address) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ data, email_address })
+            body: JSON.stringify({ data, email_address }),
+            credentials: 'include'
         });
         return await response.json();
     }
@@ -55,7 +57,8 @@ async function makeApiRequest_save(endpoint, data) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ data })
+            body: JSON.stringify({ data }),
+            credentials: 'include'
         });
         return await response.json();
     }
@@ -77,7 +80,8 @@ async function makeApiRequest(endpoint, data) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
+            credentials: 'include'
         });
         return await response.json();
     }
@@ -98,7 +102,8 @@ async function makeApiRequestDatabase(endpoint, data) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
+            credentials: 'include'
         });
         return await response.json();
     }
@@ -133,14 +138,15 @@ function displayResults(response) {
         return;
     // Show the articles card
     articlesCard.style.display = 'block';
-    // Check if this is the first result - if so, clear the default "No articles found" message
     const isFirstResult = activityLog.children.length === 0;
     if (isFirstResult) {
         const saveButtonTextContent = document.getElementById("saveArticlesBtn");
         const emailButtonTextContent = document.getElementById("emailArticlesBtn");
+        const saveToFileBtn = document.getElementById("saveToFileBtn");
         const clearArticlesBtn = document.getElementById('clearArticlesBtn');
         saveButtonTextContent.style.display = "inline-block";
         emailButtonTextContent.style.display = "inline-block";
+        saveToFileBtn.style.display = "inline-block";
         clearArticlesBtn.style.display = "inline-block";
     }
     const temp = document.createElement("div");
@@ -183,9 +189,11 @@ function displayResultsReload() {
     if (isFirstResult) {
         const saveButtonTextContent = document.getElementById("saveArticlesBtn");
         const emailButtonTextContent = document.getElementById("emailArticlesBtn");
+        const saveToFileBtn = document.getElementById("saveToFileBtn");
         const clearArticlesBtn = document.getElementById('clearArticlesBtn');
         saveButtonTextContent.style.display = "inline-block";
         emailButtonTextContent.style.display = "inline-block";
+        saveToFileBtn.style.display = "inline-block";
         clearArticlesBtn.style.display = "inline-block";
     }
     // Append new result (don't clear existing content)
@@ -221,9 +229,11 @@ function clearCheckboxes() {
     if ((activityLog === null || activityLog === void 0 ? void 0 : activityLog.children.length) == 0) {
         const saveButtonTextContent = document.getElementById("saveArticlesBtn");
         const emailButtonTextContent = document.getElementById("emailArticlesBtn");
+        const saveToFileBtn = document.getElementById("saveToFileBtn");
         const clearArticlesBtn = document.getElementById('clearArticlesBtn');
         saveButtonTextContent.style.display = "none";
         emailButtonTextContent.style.display = "none";
+        saveToFileBtn.style.display = "none";
         clearArticlesBtn.style.display = "none";
     }
     return;
@@ -256,27 +266,22 @@ function clearArticles() {
 }
 // Function to get values from "Search a site" form
 function getSiteSearchValues() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     // Get all checked website checkboxes
     const websiteCheckboxes = document.querySelectorAll('input[name="websites"]:checked');
     const websites = Array.from(websiteCheckboxes).map(checkbox => checkbox.value);
-    // console.log(Number((document.getElementById('site-day-from') as HTMLSelectElement).value) || n_day)
-    // console.log(Number((document.getElementById('site-month-from') as HTMLSelectElement).value) || n_month)
-    // console.log(Number((document.getElementById('site-year-from') as HTMLSelectElement).value) || n_year)
-    // console.log(Number((document.getElementById('site-day-to') as HTMLSelectElement).value) || n_day)
-    // console.log(Number((document.getElementById('site-month-to') as HTMLSelectElement).value) || n_month)
-    // console.log(Number((document.getElementById('site-year-to') as HTMLSelectElement).value) || n_day)
     return {
         websites: websites || ["0"],
         searchTerms: ((_a = document.getElementById('search')) === null || _a === void 0 ? void 0 : _a.value) || "MSI",
         limit: Number((_b = document.getElementById('amount')) === null || _b === void 0 ? void 0 : _b.value) || 1,
         day_from: Number((_c = document.getElementById('site-day-from')) === null || _c === void 0 ? void 0 : _c.value) || 1,
         month_from: Number((_d = document.getElementById('site-month-from')) === null || _d === void 0 ? void 0 : _d.value) || 1,
-        year_from: Number((_e = document.getElementById('site-year-from')) === null || _e === void 0 ? void 0 : _e.value) || 2025,
+        year_from: Number((_e = document.getElementById('site-year-from')) === null || _e === void 0 ? void 0 : _e.value) || n_year,
         day_to: Number((_f = document.getElementById('site-day-to')) === null || _f === void 0 ? void 0 : _f.value) || n_day,
         month_to: Number((_g = document.getElementById('site-month-to')) === null || _g === void 0 ? void 0 : _g.value) || n_month,
         year_to: Number((_h = document.getElementById('site-year-to')) === null || _h === void 0 ? void 0 : _h.value) || n_year,
-        keywords: ((_j = document.getElementById('keywords')) === null || _j === void 0 ? void 0 : _j.value) || ""
+        keywords: ((_j = document.getElementById('keywords')) === null || _j === void 0 ? void 0 : _j.value) || "",
+        customPrompt: ((_k = document.getElementById('custom-prompt')) === null || _k === void 0 ? void 0 : _k.value) || ""
     };
 }
 // Function to get values from "Search database" form
@@ -336,6 +341,59 @@ function saveToLocalStorage(newHMTL) {
 // DOM Content Loaded event handler
 document.addEventListener('DOMContentLoaded', function () {
     displayResultsReload();
+    // Generic helper to initialize single-select custom dropdowns
+    function initSingleSelectDropdown(buttonId, contentId, textId, hiddenInputId) {
+        const button = document.getElementById(buttonId);
+        const content = document.getElementById(contentId);
+        const text = document.getElementById(textId);
+        const hiddenInput = document.getElementById(hiddenInputId);
+        const arrow = button === null || button === void 0 ? void 0 : button.querySelector('.dropdown-arrow');
+        if (button && content && hiddenInput) {
+            button.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                // Close other dropdowns first
+                const allContents = document.querySelectorAll('.dropdown-content');
+                allContents.forEach(c => {
+                    var _a, _b;
+                    if (c !== content) {
+                        c.classList.remove('show');
+                        (_b = (_a = c.parentElement) === null || _a === void 0 ? void 0 : _a.querySelector('.dropdown-arrow')) === null || _b === void 0 ? void 0 : _b.classList.remove('open');
+                    }
+                });
+                content.classList.toggle('show');
+                arrow === null || arrow === void 0 ? void 0 : arrow.classList.toggle('open');
+            });
+            content.querySelectorAll('.dropdown-option').forEach(option => {
+                option.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const value = option.getAttribute('data-value') || '';
+                    const label = option.textContent || '';
+                    hiddenInput.value = value;
+                    if (text) {
+                        text.textContent = label;
+                    }
+                    content.classList.remove('show');
+                    arrow === null || arrow === void 0 ? void 0 : arrow.classList.remove('open');
+                    hiddenInput.dispatchEvent(new Event('change'));
+                });
+            });
+        }
+    }
+    // Initialize custom single-select dropdowns for days, months, and years
+    initSingleSelectDropdown('site-day-from-btn', 'site-day-from-content', 'site-day-from-text', 'site-day-from');
+    initSingleSelectDropdown('site-month-from-btn', 'site-month-from-content', 'site-month-from-text', 'site-month-from');
+    initSingleSelectDropdown('site-year-from-btn', 'site-year-from-content', 'site-year-from-text', 'site-year-from');
+    initSingleSelectDropdown('site-day-to-btn', 'site-day-to-content', 'site-day-to-text', 'site-day-to');
+    initSingleSelectDropdown('site-month-to-btn', 'site-month-to-content', 'site-month-to-text', 'site-month-to');
+    initSingleSelectDropdown('site-year-to-btn', 'site-year-to-content', 'site-year-to-text', 'site-year-to');
+    initSingleSelectDropdown('database-day-from-btn', 'database-day-from-content', 'database-day-from-text', 'database-day-from');
+    initSingleSelectDropdown('database-month-from-btn', 'database-month-from-content', 'database-month-from-text', 'database-month-from');
+    initSingleSelectDropdown('database-year-from-btn', 'database-year-from-content', 'database-year-from-text', 'database-year-from');
+    initSingleSelectDropdown('database-day-to-btn', 'database-day-to-content', 'database-day-to-text', 'database-day-to');
+    initSingleSelectDropdown('database-month-to-btn', 'database-month-to-content', 'database-month-to-text', 'database-month-to');
+    initSingleSelectDropdown('database-year-to-btn', 'database-year-to-content', 'database-year-to-text', 'database-year-to');
     const btn = document.getElementById("backToTopBtn");
     const targetSection = document.getElementById("articles-card");
     if (btn) {
@@ -353,6 +411,35 @@ document.addEventListener('DOMContentLoaded', function () {
             targetSection === null || targetSection === void 0 ? void 0 : targetSection.scrollIntoView({ behavior: "smooth", block: "start" });
         });
     }
+    // Wire up custom number input arrows
+    function setupCustomNumberInput(inputId) {
+        const input = document.getElementById(inputId);
+        if (!input)
+            return;
+        const container = input.closest('.number-input-container');
+        if (!container)
+            return;
+        const upBtn = container.querySelector('.number-input-arrow.up');
+        const downBtn = container.querySelector('.number-input-arrow.down');
+        upBtn === null || upBtn === void 0 ? void 0 : upBtn.addEventListener('click', () => {
+            const val = parseInt(input.value) || 0;
+            const max = input.max ? parseInt(input.max) : 100;
+            if (val < max) {
+                input.value = (val + 1).toString();
+                input.dispatchEvent(new Event('change'));
+            }
+        });
+        downBtn === null || downBtn === void 0 ? void 0 : downBtn.addEventListener('click', () => {
+            const val = parseInt(input.value) || 0;
+            const min = input.min ? parseInt(input.min) : 0;
+            if (val > min) {
+                input.value = (val - 1).toString();
+                input.dispatchEvent(new Event('change'));
+            }
+        });
+    }
+    setupCustomNumberInput('amount');
+    setupCustomNumberInput('database-amount');
     // Dropdown functionality for site search
     const websiteDropdownButton = document.getElementById('websiteDropdownButton');
     const websiteDropdownContent = document.getElementById('websiteDropdownContent');
@@ -362,6 +449,15 @@ document.addEventListener('DOMContentLoaded', function () {
         websiteDropdownButton.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
+            // Close other dropdowns first
+            const allContents = document.querySelectorAll('.dropdown-content');
+            allContents.forEach(c => {
+                var _a, _b;
+                if (c !== websiteDropdownContent) {
+                    c.classList.remove('show');
+                    (_b = (_a = c.parentElement) === null || _a === void 0 ? void 0 : _a.querySelector('.dropdown-arrow')) === null || _b === void 0 ? void 0 : _b.classList.remove('open');
+                }
+            });
             websiteDropdownContent.classList.toggle('show');
             websiteDropdownArrow === null || websiteDropdownArrow === void 0 ? void 0 : websiteDropdownArrow.classList.toggle('open');
         });
@@ -396,21 +492,23 @@ document.addEventListener('DOMContentLoaded', function () {
     const clearButtonTextContent = document.getElementById("clearArticlesBtn");
     const saveButtonTextContent = document.getElementById("saveArticlesBtn");
     const emailButtonTextContent = document.getElementById("emailArticlesBtn");
+    const saveToFileBtn = document.getElementById("saveToFileBtn");
     const clearSelectionsButton = document.getElementById('selectionsBtn');
-    if (clearSelectionsButton && clearButtonTextContent && saveButtonTextContent && emailButtonTextContent) {
+    if (clearSelectionsButton && clearButtonTextContent && saveButtonTextContent && emailButtonTextContent && saveToFileBtn) {
         const updateArticlesButton = () => {
-            const checkedBoxes = document.querySelectorAll('input[name="articleCheckBox"]:checked');
-            const count = checkedBoxes.length;
+            const count = getCheckedArticles().length;
             if (count == 0) {
                 clearButtonTextContent.textContent = "Clear All";
                 saveButtonTextContent.textContent = "Save All";
                 emailButtonTextContent.textContent = "Email All";
+                saveToFileBtn.textContent = "Save to File";
                 clearSelectionsButton.style.display = "none";
             }
             else {
                 clearButtonTextContent.textContent = `Clear ${count} Articles`;
                 saveButtonTextContent.textContent = `Save ${count} Articles`;
                 emailButtonTextContent.textContent = `Email ${count} Articles`;
+                saveToFileBtn.textContent = `Save ${count} to File`;
                 clearSelectionsButton.style.display = "inline-block";
                 clearSelectionsButton.textContent = `Clear ${count} Selections`;
             }
@@ -422,6 +520,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 updateArticlesButton();
             }
         }));
+        // clear selections functionality
+        clearSelectionsButton.addEventListener('click', function (e) {
+            clearCheckboxes();
+            updateArticlesButton();
+        });
     }
     // Dropdown functionality for database search
     const databaseWebsiteDropdownButton = document.getElementById('databaseWebsiteDropdownButton');
@@ -432,6 +535,15 @@ document.addEventListener('DOMContentLoaded', function () {
         databaseWebsiteDropdownButton.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
+            // Close other dropdowns first
+            const allContents = document.querySelectorAll('.dropdown-content');
+            allContents.forEach(c => {
+                var _a, _b;
+                if (c !== databaseWebsiteDropdownContent) {
+                    c.classList.remove('show');
+                    (_b = (_a = c.parentElement) === null || _a === void 0 ? void 0 : _a.querySelector('.dropdown-arrow')) === null || _b === void 0 ? void 0 : _b.classList.remove('open');
+                }
+            });
             databaseWebsiteDropdownContent.classList.toggle('show');
             databaseWebsiteDropdownArrow === null || databaseWebsiteDropdownArrow === void 0 ? void 0 : databaseWebsiteDropdownArrow.classList.toggle('open');
         });
@@ -464,14 +576,16 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     // Close dropdowns when clicking outside
     document.addEventListener('click', function (event) {
-        if (websiteDropdownButton && websiteDropdownContent && !websiteDropdownButton.contains(event.target)) {
-            websiteDropdownContent.classList.remove('show');
-            websiteDropdownArrow === null || websiteDropdownArrow === void 0 ? void 0 : websiteDropdownArrow.classList.remove('open');
-        }
-        if (databaseWebsiteDropdownButton && databaseWebsiteDropdownContent && !databaseWebsiteDropdownButton.contains(event.target)) {
-            databaseWebsiteDropdownContent.classList.remove('show');
-            databaseWebsiteDropdownArrow === null || databaseWebsiteDropdownArrow === void 0 ? void 0 : databaseWebsiteDropdownArrow.classList.remove('open');
-        }
+        const customDropdowns = document.querySelectorAll('.custom-dropdown');
+        customDropdowns.forEach(dropdown => {
+            const button = dropdown.querySelector('.dropdown-button');
+            const content = dropdown.querySelector('.dropdown-content');
+            const arrow = button === null || button === void 0 ? void 0 : button.querySelector('.dropdown-arrow');
+            if (button && content && !button.contains(event.target) && !content.contains(event.target)) {
+                content.classList.remove('show');
+                arrow === null || arrow === void 0 ? void 0 : arrow.classList.remove('open');
+            }
+        });
     });
     // Select All functionality for site search
     const selectAllCheckbox = document.getElementById('selectAll');
@@ -527,6 +641,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     localStorage.clear();
                     saveButtonTextContent.style.display = "none";
                     emailButtonTextContent.style.display = "none";
+                    saveToFileBtn.style.display = "none";
                     clearArticlesBtn.style.display = "none";
                 }
                 else {
@@ -536,19 +651,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     clearButtonTextContent.textContent = "Clear All";
                     saveButtonTextContent.textContent = "Save All";
                     emailButtonTextContent.textContent = "Email All";
+                    saveToFileBtn.textContent = "Save to File";
                     clearSelectionsButton.style.display = "none";
                 }
             }
-        });
-    }
-    // clear selections functionality
-    if (clearSelectionsButton) {
-        clearSelectionsButton.addEventListener('click', function (e) {
-            clearCheckboxes();
-            clearButtonTextContent.textContent = "Clear All";
-            saveButtonTextContent.textContent = "Save All";
-            emailButtonTextContent.textContent = "Email All";
-            clearSelectionsButton.style.display = "none";
         });
     }
     // email articles functionality 
@@ -644,6 +750,244 @@ document.addEventListener('DOMContentLoaded', function () {
                 saveArticlesBtn.textContent = originalText;
                 saveArticlesBtn.disabled = false;
             }
+        });
+    }
+    const saveToFileBtnElement = document.getElementById('saveToFileBtn');
+    if (saveToFileBtnElement) {
+        saveToFileBtnElement.addEventListener("click", function (e) {
+            e.preventDefault();
+            const activityLog = document.getElementById('activity-log');
+            if (!activityLog)
+                return;
+            const checkedArticles = getCheckedArticles();
+            let selectedContainers = [];
+            if (checkedArticles.length > 0) {
+                checkedArticles.forEach(url => {
+                    const cb = document.querySelector(`input[name="articleCheckBox"][value="${url}"]`);
+                    const container = cb === null || cb === void 0 ? void 0 : cb.closest('.article-container');
+                    if (container) {
+                        selectedContainers.push(container);
+                    }
+                });
+            }
+            else {
+                // If none checked, download all articles shown
+                const allContainers = activityLog.querySelectorAll('.article-container');
+                allContainers.forEach(container => {
+                    selectedContainers.push(container);
+                });
+            }
+            if (selectedContainers.length === 0) {
+                alert("nothing to save");
+                return;
+            }
+            // Combine HTML and clean up checkboxes
+            let htmlContent = "";
+            selectedContainers.forEach(container => {
+                const clone = container.cloneNode(true);
+                const checkbox = clone.querySelector('input[name="articleCheckBox"]');
+                if (checkbox) {
+                    checkbox.remove();
+                }
+                htmlContent += clone.outerHTML + "\n";
+            });
+            // Wrap in standard HTML template for saving
+            const fullHtml = `<!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Saved Summaries</title>
+                    <style>
+                        body {
+                            background-color: #09090b;
+                            color: #f4f4f5;
+                            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            padding: 2rem;
+                            max-width: 800px;
+                            margin: 0 auto;
+                        }
+
+                        .article-container {
+                            margin-bottom: 2rem;
+                            padding: 1.75rem;
+                            border: 1px solid #27272a;
+                            border-radius: 8px;
+                            background-color: #18181b;
+                        }
+
+                        .article-analysis {
+                            font-family: inherit;
+                        }
+
+                        /* Table styles inside saved file */
+                        table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-bottom: 1.5rem;
+                            background-color: #18181b;
+                            border: 1px solid #27272a;
+                            border-radius: 6px;
+                            overflow: hidden;
+                        }
+
+                        th, td {
+                            border: 1px solid #27272a;
+                            padding: 0.75rem 1rem;
+                            font-size: 0.85rem;
+                            text-align: left;
+                        }
+
+                        th {
+                            background-color: rgba(255, 255, 255, 0.02);
+                            color: #a1a1aa;
+                            font-weight: 600;
+                        }
+
+                        td {
+                            color: #f4f4f5;
+                        }
+
+                        /* Link Preview Card */
+                        .link-preview-card {
+                            display: flex;
+                            gap: 1.25rem;
+                            background-color: #09090b;
+                            border: 1px solid #27272a;
+                            border-radius: 6px;
+                            padding: 1.25rem;
+                            margin-top: 0.5rem;
+                            overflow: hidden;
+                            align-items: stretch;
+                            text-align: left;
+                        }
+
+                        .link-preview-details {
+                            flex: 1;
+                            display: flex;
+                            flex-direction: column;
+                            gap: 0.5rem;
+                            justify-content: center;
+                        }
+
+                        .link-preview-site {
+                            font-size: 0.75rem;
+                            text-transform: uppercase;
+                            letter-spacing: 0.05em;
+                            color: #a1a1aa;
+                            font-weight: 600;
+                        }
+
+                        .link-preview-title {
+                            font-size: 1.05rem;
+                            font-weight: 600;
+                            color: #f4f4f5;
+                            text-decoration: underline;
+                            line-height: 1.4;
+                        }
+
+                        .link-preview-desc {
+                            font-size: 0.85rem;
+                            color: #a1a1aa;
+                            line-height: 1.5;
+                            margin: 0;
+                        }
+
+                        .link-preview-meta {
+                            display: flex;
+                            align-items: center;
+                            gap: 0.5rem;
+                            font-size: 0.75rem;
+                            color: #a1a1aa;
+                            margin-top: 0.25rem;
+                        }
+
+                        .link-preview-divider {
+                            color: #3f3f46;
+                        }
+
+                        .link-preview-thumbnail {
+                            width: 120px;
+                            min-width: 120px;
+                            height: 90px;
+                            border-radius: 4px;
+                            overflow: hidden;
+                            border: 1px solid #27272a;
+                            align-self: center;
+                            display: flex;
+                        }
+
+                        .link-preview-thumbnail img {
+                            width: 100%;
+                            height: 100%;
+                            object-fit: cover;
+                        }
+
+                        /* Sentiment section inside saved file */
+                        .sentiment-section {
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                            gap: 1rem;
+                        }
+
+                        .sentiment-block {
+                            padding: 1rem 1.5rem;
+                            border-radius: 8px;
+                            border: 1px solid #27272a;
+                            background-color: #18181b;
+                        }
+
+                        .sentiment-block.positive {
+                            border-left: 5px solid #22c55e;
+                        }
+
+                        .sentiment-block.neutral {
+                            border-left: 5px solid #ef4444;
+                        }
+
+                        .sentiment-block.negative {
+                            border-left: 5px solid #71717a;
+                        }
+
+                        h2 {
+                            font-size: 1.25rem;
+                            margin-top: 1.5rem;
+                            margin-bottom: 0.75rem;
+                            color: #f4f4f5;
+                        }
+
+                        h3 {
+                            margin-top: 0;
+                            color: #f4f4f5;
+                        }
+
+                        ul {
+                            background-color: #18181b;
+                            padding: 1rem 1.5rem;
+                            border: 1px solid #27272a;
+                            border-radius: 8px;
+                            margin-bottom: 2rem;
+                            color: #e4e4e7;
+                        }
+
+                        li {
+                            margin-bottom: 0.5rem;
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${htmlContent}
+                </body>
+                </html>`;
+            // Create Blob and trigger local download
+            const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'summaries.html';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         });
     }
     // Form submission handler for site search

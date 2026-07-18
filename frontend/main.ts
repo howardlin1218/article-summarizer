@@ -15,6 +15,7 @@ interface SearchValues {
     month_to: number; 
     year_to: number;
     keywords: string;
+    customPrompt?: string;
 }
 
 interface SearchValuesDatabase {
@@ -49,7 +50,8 @@ async function makeApiRequest_recent(endpoint: string): Promise<ApiResponse> {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
-            }
+            },
+            credentials: 'include'
         });
         return await response.json();
     } catch (error) {
@@ -69,7 +71,8 @@ async function makeApiRequest_send(endpoint: string, data: string[], email_addre
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({data, email_address})
+            body: JSON.stringify({data, email_address}),
+            credentials: 'include'
         });
         return await response.json();
     } catch (error) {
@@ -90,7 +93,8 @@ async function makeApiRequest_save(endpoint: string, data: string[]): Promise<Ap
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({data})
+            body: JSON.stringify({data}),
+            credentials: 'include'
         });
         return await response.json();
     } catch (error) {
@@ -112,7 +116,8 @@ async function makeApiRequest(endpoint: string, data: SearchValues): Promise<Api
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
+            credentials: 'include'
         });
         return await response.json();
     } catch (error) {
@@ -133,7 +138,8 @@ async function makeApiRequestDatabase(endpoint: string, data: SearchValuesDataba
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
+            credentials: 'include'
         });
         return await response.json();
     } catch (error) {
@@ -169,15 +175,16 @@ function displayResults(response: ApiResponse): void {
     // Show the articles card
     articlesCard.style.display = 'block';
     
-    // Check if this is the first result - if so, clear the default "No articles found" message
     const isFirstResult = activityLog.children.length === 0;
     if (isFirstResult) {
         const saveButtonTextContent = document.getElementById("saveArticlesBtn") as HTMLButtonElement;
         const emailButtonTextContent = document.getElementById("emailArticlesBtn") as HTMLButtonElement;
+        const saveToFileBtn = document.getElementById("saveToFileBtn") as HTMLButtonElement;
         const clearArticlesBtn = document.getElementById('clearArticlesBtn') as HTMLButtonElement;
 
         saveButtonTextContent.style.display = "inline-block";
         emailButtonTextContent.style.display = "inline-block";
+        saveToFileBtn.style.display = "inline-block";
         clearArticlesBtn.style.display = "inline-block";
     }
     
@@ -225,10 +232,12 @@ function displayResultsReload(): void {
     if (isFirstResult) {
         const saveButtonTextContent = document.getElementById("saveArticlesBtn") as HTMLButtonElement;
         const emailButtonTextContent = document.getElementById("emailArticlesBtn") as HTMLButtonElement;
+        const saveToFileBtn = document.getElementById("saveToFileBtn") as HTMLButtonElement;
         const clearArticlesBtn = document.getElementById('clearArticlesBtn') as HTMLButtonElement;
 
         saveButtonTextContent.style.display = "inline-block";
         emailButtonTextContent.style.display = "inline-block";
+        saveToFileBtn.style.display = "inline-block";
         clearArticlesBtn.style.display = "inline-block";
     }
     
@@ -270,10 +279,12 @@ function clearCheckboxes(): void {
     if (activityLog?.children.length == 0) {
         const saveButtonTextContent = document.getElementById("saveArticlesBtn") as HTMLButtonElement;
         const emailButtonTextContent = document.getElementById("emailArticlesBtn") as HTMLButtonElement;
+        const saveToFileBtn = document.getElementById("saveToFileBtn") as HTMLButtonElement;
         const clearArticlesBtn = document.getElementById('clearArticlesBtn') as HTMLButtonElement;
 
         saveButtonTextContent.style.display = "none";
         emailButtonTextContent.style.display = "none";
+        saveToFileBtn.style.display = "none";
         clearArticlesBtn.style.display = "none";
     }
     return;
@@ -315,23 +326,18 @@ function getSiteSearchValues(): SearchValues {
     const websiteCheckboxes = document.querySelectorAll('input[name="websites"]:checked') as NodeListOf<HTMLInputElement>;
     const websites = Array.from(websiteCheckboxes).map(checkbox => checkbox.value);
 
-    // console.log(Number((document.getElementById('site-day-from') as HTMLSelectElement).value) || n_day)
-    // console.log(Number((document.getElementById('site-month-from') as HTMLSelectElement).value) || n_month)
-    // console.log(Number((document.getElementById('site-year-from') as HTMLSelectElement).value) || n_year)
-    // console.log(Number((document.getElementById('site-day-to') as HTMLSelectElement).value) || n_day)
-    // console.log(Number((document.getElementById('site-month-to') as HTMLSelectElement).value) || n_month)
-    // console.log(Number((document.getElementById('site-year-to') as HTMLSelectElement).value) || n_day)
     return {
         websites: websites || ["0"],
         searchTerms: (document.getElementById('search') as HTMLInputElement)?.value || "MSI",
         limit: Number((document.getElementById('amount') as HTMLInputElement)?.value) || 1,
-        day_from: Number((document.getElementById('site-day-from') as HTMLSelectElement)?.value) || 1,
-        month_from: Number((document.getElementById('site-month-from') as HTMLSelectElement)?.value) || 1,
-        year_from: Number((document.getElementById('site-year-from') as HTMLSelectElement)?.value) || 2025,
-        day_to: Number((document.getElementById('site-day-to') as HTMLSelectElement)?.value) || n_day,
-        month_to: Number((document.getElementById('site-month-to') as HTMLSelectElement)?.value) || n_month,
-        year_to: Number((document.getElementById('site-year-to') as HTMLSelectElement)?.value) || n_year,
-        keywords: (document.getElementById('keywords') as HTMLInputElement)?.value || ""
+        day_from: Number((document.getElementById('site-day-from') as HTMLInputElement)?.value) || 1,
+        month_from: Number((document.getElementById('site-month-from') as HTMLInputElement)?.value) || 1,
+        year_from: Number((document.getElementById('site-year-from') as HTMLInputElement)?.value) || n_year,
+        day_to: Number((document.getElementById('site-day-to') as HTMLInputElement)?.value) || n_day,
+        month_to: Number((document.getElementById('site-month-to') as HTMLInputElement)?.value) || n_month,
+        year_to: Number((document.getElementById('site-year-to') as HTMLInputElement)?.value) || n_year,
+        keywords: (document.getElementById('keywords') as HTMLInputElement)?.value || "",
+        customPrompt: (document.getElementById('custom-prompt') as HTMLTextAreaElement)?.value || ""
     };
 }
 
@@ -348,12 +354,12 @@ function getDatabaseSearchValues(): SearchValuesDatabase {
         websites: websites || ["Tom's Hardware"],
         searchTerms: (document.getElementById('database-search') as HTMLInputElement)?.value || "MSI",
         limit: Number((document.getElementById('database-amount') as HTMLInputElement)?.value) || 0,
-        day_from: Number((document.getElementById('database-day-from') as HTMLSelectElement)?.value) || 0,
-        month_from: Number((document.getElementById('database-month-from') as HTMLSelectElement)?.value) || 0,
-        year_from: Number((document.getElementById('database-year-from') as HTMLSelectElement)?.value) || 0,
-        day_to: Number((document.getElementById('database-day-to') as HTMLSelectElement)?.value) || 0,
-        month_to: Number((document.getElementById('database-month-to') as HTMLSelectElement)?.value) || 0,
-        year_to: Number((document.getElementById('database-year-to') as HTMLSelectElement)?.value) || 0,
+        day_from: Number((document.getElementById('database-day-from') as HTMLInputElement)?.value) || 0,
+        month_from: Number((document.getElementById('database-month-from') as HTMLInputElement)?.value) || 0,
+        year_from: Number((document.getElementById('database-year-from') as HTMLInputElement)?.value) || 0,
+        day_to: Number((document.getElementById('database-day-to') as HTMLInputElement)?.value) || 0,
+        month_to: Number((document.getElementById('database-month-to') as HTMLInputElement)?.value) || 0,
+        year_to: Number((document.getElementById('database-year-to') as HTMLInputElement)?.value) || 0,
         keywords: (document.getElementById('database-keywords') as HTMLInputElement)?.value || "",
         urls: (document.getElementById('database-urls') as HTMLInputElement)?.value || ""
     };
@@ -402,6 +408,67 @@ function saveToLocalStorage(newHMTL: string) {
 // DOM Content Loaded event handler
 document.addEventListener('DOMContentLoaded', function(): void {
     displayResultsReload();
+
+    // Generic helper to initialize single-select custom dropdowns
+    function initSingleSelectDropdown(buttonId: string, contentId: string, textId: string, hiddenInputId: string): void {
+        const button = document.getElementById(buttonId);
+        const content = document.getElementById(contentId);
+        const text = document.getElementById(textId);
+        const hiddenInput = document.getElementById(hiddenInputId) as HTMLInputElement;
+        const arrow = button?.querySelector('.dropdown-arrow');
+
+        if (button && content && hiddenInput) {
+            button.addEventListener('click', function(e: Event): void {
+                e.preventDefault();
+                e.stopPropagation();
+                // Close other dropdowns first
+                const allContents = document.querySelectorAll('.dropdown-content');
+                allContents.forEach(c => {
+                    if (c !== content) {
+                        c.classList.remove('show');
+                        c.parentElement?.querySelector('.dropdown-arrow')?.classList.remove('open');
+                    }
+                });
+                
+                content.classList.toggle('show');
+                arrow?.classList.toggle('open');
+            });
+
+            content.querySelectorAll('.dropdown-option').forEach(option => {
+                option.addEventListener('click', (e: Event): void => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const value = (option as HTMLElement).getAttribute('data-value') || '';
+                    const label = (option as HTMLElement).textContent || '';
+                    hiddenInput.value = value;
+                    if (text) {
+                        text.textContent = label;
+                    }
+                    content.classList.remove('show');
+                    arrow?.classList.remove('open');
+                    hiddenInput.dispatchEvent(new Event('change'));
+                });
+            });
+        }
+    }
+
+    // Initialize custom single-select dropdowns for days, months, and years
+    initSingleSelectDropdown('site-day-from-btn', 'site-day-from-content', 'site-day-from-text', 'site-day-from');
+    initSingleSelectDropdown('site-month-from-btn', 'site-month-from-content', 'site-month-from-text', 'site-month-from');
+    initSingleSelectDropdown('site-year-from-btn', 'site-year-from-content', 'site-year-from-text', 'site-year-from');
+
+    initSingleSelectDropdown('site-day-to-btn', 'site-day-to-content', 'site-day-to-text', 'site-day-to');
+    initSingleSelectDropdown('site-month-to-btn', 'site-month-to-content', 'site-month-to-text', 'site-month-to');
+    initSingleSelectDropdown('site-year-to-btn', 'site-year-to-content', 'site-year-to-text', 'site-year-to');
+
+    initSingleSelectDropdown('database-day-from-btn', 'database-day-from-content', 'database-day-from-text', 'database-day-from');
+    initSingleSelectDropdown('database-month-from-btn', 'database-month-from-content', 'database-month-from-text', 'database-month-from');
+    initSingleSelectDropdown('database-year-from-btn', 'database-year-from-content', 'database-year-from-text', 'database-year-from');
+
+    initSingleSelectDropdown('database-day-to-btn', 'database-day-to-content', 'database-day-to-text', 'database-day-to');
+    initSingleSelectDropdown('database-month-to-btn', 'database-month-to-content', 'database-month-to-text', 'database-month-to');
+    initSingleSelectDropdown('database-year-to-btn', 'database-year-to-content', 'database-year-to-text', 'database-year-to');
+
     const btn = document.getElementById("backToTopBtn");
     const targetSection = document.getElementById("articles-card");
     if (btn) {
@@ -420,6 +487,37 @@ document.addEventListener('DOMContentLoaded', function(): void {
         });
     }
 
+    // Wire up custom number input arrows
+    function setupCustomNumberInput(inputId: string): void {
+        const input = document.getElementById(inputId) as HTMLInputElement;
+        if (!input) return;
+        const container = input.closest('.number-input-container');
+        if (!container) return;
+        const upBtn = container.querySelector('.number-input-arrow.up');
+        const downBtn = container.querySelector('.number-input-arrow.down');
+
+        upBtn?.addEventListener('click', () => {
+            const val = parseInt(input.value) || 0;
+            const max = input.max ? parseInt(input.max) : 100;
+            if (val < max) {
+                input.value = (val + 1).toString();
+                input.dispatchEvent(new Event('change'));
+            }
+        });
+
+        downBtn?.addEventListener('click', () => {
+            const val = parseInt(input.value) || 0;
+            const min = input.min ? parseInt(input.min) : 0;
+            if (val > min) {
+                input.value = (val - 1).toString();
+                input.dispatchEvent(new Event('change'));
+            }
+        });
+    }
+
+    setupCustomNumberInput('amount');
+    setupCustomNumberInput('database-amount');
+
     // Dropdown functionality for site search
     const websiteDropdownButton = document.getElementById('websiteDropdownButton');
     const websiteDropdownContent = document.getElementById('websiteDropdownContent');
@@ -430,6 +528,16 @@ document.addEventListener('DOMContentLoaded', function(): void {
         websiteDropdownButton.addEventListener('click', function(e: Event): void {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Close other dropdowns first
+            const allContents = document.querySelectorAll('.dropdown-content');
+            allContents.forEach(c => {
+                if (c !== websiteDropdownContent) {
+                    c.classList.remove('show');
+                    c.parentElement?.querySelector('.dropdown-arrow')?.classList.remove('open');
+                }
+            });
+
             websiteDropdownContent.classList.toggle('show');
             websiteDropdownArrow?.classList.toggle('open');
         });
@@ -465,21 +573,23 @@ document.addEventListener('DOMContentLoaded', function(): void {
     const clearButtonTextContent = document.getElementById("clearArticlesBtn") as HTMLButtonElement;
     const saveButtonTextContent = document.getElementById("saveArticlesBtn") as HTMLButtonElement;
     const emailButtonTextContent = document.getElementById("emailArticlesBtn") as HTMLButtonElement;
+    const saveToFileBtn = document.getElementById("saveToFileBtn") as HTMLButtonElement;
     const clearSelectionsButton = document.getElementById('selectionsBtn') as HTMLButtonElement;
     
-    if (clearSelectionsButton && clearButtonTextContent && saveButtonTextContent && emailButtonTextContent) {
+    if (clearSelectionsButton && clearButtonTextContent && saveButtonTextContent && emailButtonTextContent && saveToFileBtn) {
         const updateArticlesButton = () => {
-            const checkedBoxes = document.querySelectorAll('input[name="articleCheckBox"]:checked');
-            const count = checkedBoxes.length;
+            const count = getCheckedArticles().length;
             if (count == 0) {
                 clearButtonTextContent.textContent = "Clear All";
                 saveButtonTextContent.textContent = "Save All";
                 emailButtonTextContent.textContent = "Email All";
+                saveToFileBtn.textContent = "Save to File";
                 clearSelectionsButton.style.display = "none";
             } else {
                 clearButtonTextContent.textContent = `Clear ${count} Articles`;
                 saveButtonTextContent.textContent = `Save ${count} Articles`;
                 emailButtonTextContent.textContent = `Email ${count} Articles`;
+                saveToFileBtn.textContent = `Save ${count} to File`;
 
                 clearSelectionsButton.style.display = "inline-block";
                 clearSelectionsButton.textContent  = `Clear ${count} Selections`;
@@ -493,6 +603,12 @@ document.addEventListener('DOMContentLoaded', function(): void {
                 updateArticlesButton();
             }
         }));
+
+        // clear selections functionality
+        clearSelectionsButton.addEventListener('click', function(e: Event): void {
+            clearCheckboxes();
+            updateArticlesButton();
+        });
     }
 
     // Dropdown functionality for database search
@@ -505,6 +621,16 @@ document.addEventListener('DOMContentLoaded', function(): void {
         databaseWebsiteDropdownButton.addEventListener('click', function(e: Event): void {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Close other dropdowns first
+            const allContents = document.querySelectorAll('.dropdown-content');
+            allContents.forEach(c => {
+                if (c !== databaseWebsiteDropdownContent) {
+                    c.classList.remove('show');
+                    c.parentElement?.querySelector('.dropdown-arrow')?.classList.remove('open');
+                }
+            });
+
             databaseWebsiteDropdownContent.classList.toggle('show');
             databaseWebsiteDropdownArrow?.classList.toggle('open');
         });
@@ -538,14 +664,16 @@ document.addEventListener('DOMContentLoaded', function(): void {
 
     // Close dropdowns when clicking outside
     document.addEventListener('click', function(event): void {
-        if (websiteDropdownButton && websiteDropdownContent && !websiteDropdownButton.contains(event.target as Node)) {
-            websiteDropdownContent.classList.remove('show');
-            websiteDropdownArrow?.classList.remove('open');
-        }
-        if (databaseWebsiteDropdownButton && databaseWebsiteDropdownContent && !databaseWebsiteDropdownButton.contains(event.target as Node)) {
-            databaseWebsiteDropdownContent.classList.remove('show');
-            databaseWebsiteDropdownArrow?.classList.remove('open');
-        }
+        const customDropdowns = document.querySelectorAll('.custom-dropdown');
+        customDropdowns.forEach(dropdown => {
+            const button = dropdown.querySelector('.dropdown-button');
+            const content = dropdown.querySelector('.dropdown-content');
+            const arrow = button?.querySelector('.dropdown-arrow');
+            if (button && content && !button.contains(event.target as Node) && !content.contains(event.target as Node)) {
+                content.classList.remove('show');
+                arrow?.classList.remove('open');
+            }
+        });
     });
 
     // Select All functionality for site search
@@ -603,6 +731,7 @@ document.addEventListener('DOMContentLoaded', function(): void {
                     localStorage.clear();
                     saveButtonTextContent.style.display = "none";
                     emailButtonTextContent.style.display = "none";
+                    saveToFileBtn.style.display = "none";
                     clearArticlesBtn.style.display = "none";
                 } else {
                     clearArticles();
@@ -611,22 +740,14 @@ document.addEventListener('DOMContentLoaded', function(): void {
                     clearButtonTextContent.textContent = "Clear All";
                     saveButtonTextContent.textContent = "Save All";
                     emailButtonTextContent.textContent = "Email All";
+                    saveToFileBtn.textContent = "Save to File";
                     clearSelectionsButton.style.display = "none";
                 }
             }
         });
     }
 
-    // clear selections functionality
-    if (clearSelectionsButton) {
-        clearSelectionsButton.addEventListener('click', function(e: Event): void {
-            clearCheckboxes();
-            clearButtonTextContent.textContent = "Clear All";
-            saveButtonTextContent.textContent = "Save All";
-            emailButtonTextContent.textContent = "Email All";
-            clearSelectionsButton.style.display = "none";
-        });
-    }
+
     // email articles functionality 
     
     const modal = document.getElementById("emailModal") as HTMLDivElement;
@@ -728,6 +849,250 @@ document.addEventListener('DOMContentLoaded', function(): void {
             }
 
             }); 
+    }
+
+    const saveToFileBtnElement = document.getElementById('saveToFileBtn') as HTMLButtonElement;
+    if (saveToFileBtnElement) {
+        saveToFileBtnElement.addEventListener("click", function(e: Event): void {
+            e.preventDefault();
+            
+            const activityLog = document.getElementById('activity-log');
+            if (!activityLog) return;
+
+            const checkedArticles = getCheckedArticles();
+            let selectedContainers: Element[] = [];
+
+            if (checkedArticles.length > 0) {
+                checkedArticles.forEach(url => {
+                    const cb = document.querySelector(`input[name="articleCheckBox"][value="${url}"]`);
+                    const container = cb?.closest('.article-container');
+                    if (container) {
+                        selectedContainers.push(container);
+                    }
+                });
+            } else {
+                // If none checked, download all articles shown
+                const allContainers = activityLog.querySelectorAll('.article-container');
+                allContainers.forEach(container => {
+                    selectedContainers.push(container);
+                });
+            }
+
+            if (selectedContainers.length === 0) {
+                alert("nothing to save");
+                return;
+            }
+
+            // Combine HTML and clean up checkboxes
+            let htmlContent = "";
+            selectedContainers.forEach(container => {
+                const clone = container.cloneNode(true) as HTMLElement;
+                const checkbox = clone.querySelector('input[name="articleCheckBox"]');
+                if (checkbox) {
+                    checkbox.remove();
+                }
+                htmlContent += clone.outerHTML + "\n";
+            });
+
+            // Wrap in standard HTML template for saving
+            const fullHtml = `<!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Saved Summaries</title>
+                    <style>
+                        body {
+                            background-color: #09090b;
+                            color: #f4f4f5;
+                            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            padding: 2rem;
+                            max-width: 800px;
+                            margin: 0 auto;
+                        }
+
+                        .article-container {
+                            margin-bottom: 2rem;
+                            padding: 1.75rem;
+                            border: 1px solid #27272a;
+                            border-radius: 8px;
+                            background-color: #18181b;
+                        }
+
+                        .article-analysis {
+                            font-family: inherit;
+                        }
+
+                        /* Table styles inside saved file */
+                        table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-bottom: 1.5rem;
+                            background-color: #18181b;
+                            border: 1px solid #27272a;
+                            border-radius: 6px;
+                            overflow: hidden;
+                        }
+
+                        th, td {
+                            border: 1px solid #27272a;
+                            padding: 0.75rem 1rem;
+                            font-size: 0.85rem;
+                            text-align: left;
+                        }
+
+                        th {
+                            background-color: rgba(255, 255, 255, 0.02);
+                            color: #a1a1aa;
+                            font-weight: 600;
+                        }
+
+                        td {
+                            color: #f4f4f5;
+                        }
+
+                        /* Link Preview Card */
+                        .link-preview-card {
+                            display: flex;
+                            gap: 1.25rem;
+                            background-color: #09090b;
+                            border: 1px solid #27272a;
+                            border-radius: 6px;
+                            padding: 1.25rem;
+                            margin-top: 0.5rem;
+                            overflow: hidden;
+                            align-items: stretch;
+                            text-align: left;
+                        }
+
+                        .link-preview-details {
+                            flex: 1;
+                            display: flex;
+                            flex-direction: column;
+                            gap: 0.5rem;
+                            justify-content: center;
+                        }
+
+                        .link-preview-site {
+                            font-size: 0.75rem;
+                            text-transform: uppercase;
+                            letter-spacing: 0.05em;
+                            color: #a1a1aa;
+                            font-weight: 600;
+                        }
+
+                        .link-preview-title {
+                            font-size: 1.05rem;
+                            font-weight: 600;
+                            color: #f4f4f5;
+                            text-decoration: underline;
+                            line-height: 1.4;
+                        }
+
+                        .link-preview-desc {
+                            font-size: 0.85rem;
+                            color: #a1a1aa;
+                            line-height: 1.5;
+                            margin: 0;
+                        }
+
+                        .link-preview-meta {
+                            display: flex;
+                            align-items: center;
+                            gap: 0.5rem;
+                            font-size: 0.75rem;
+                            color: #a1a1aa;
+                            margin-top: 0.25rem;
+                        }
+
+                        .link-preview-divider {
+                            color: #3f3f46;
+                        }
+
+                        .link-preview-thumbnail {
+                            width: 120px;
+                            min-width: 120px;
+                            height: 90px;
+                            border-radius: 4px;
+                            overflow: hidden;
+                            border: 1px solid #27272a;
+                            align-self: center;
+                            display: flex;
+                        }
+
+                        .link-preview-thumbnail img {
+                            width: 100%;
+                            height: 100%;
+                            object-fit: cover;
+                        }
+
+                        /* Sentiment section inside saved file */
+                        .sentiment-section {
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                            gap: 1rem;
+                        }
+
+                        .sentiment-block {
+                            padding: 1rem 1.5rem;
+                            border-radius: 8px;
+                            border: 1px solid #27272a;
+                            background-color: #18181b;
+                        }
+
+                        .sentiment-block.positive {
+                            border-left: 5px solid #22c55e;
+                        }
+
+                        .sentiment-block.neutral {
+                            border-left: 5px solid #ef4444;
+                        }
+
+                        .sentiment-block.negative {
+                            border-left: 5px solid #71717a;
+                        }
+
+                        h2 {
+                            font-size: 1.25rem;
+                            margin-top: 1.5rem;
+                            margin-bottom: 0.75rem;
+                            color: #f4f4f5;
+                        }
+
+                        h3 {
+                            margin-top: 0;
+                            color: #f4f4f5;
+                        }
+
+                        ul {
+                            background-color: #18181b;
+                            padding: 1rem 1.5rem;
+                            border: 1px solid #27272a;
+                            border-radius: 8px;
+                            margin-bottom: 2rem;
+                            color: #e4e4e7;
+                        }
+
+                        li {
+                            margin-bottom: 0.5rem;
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${htmlContent}
+                </body>
+                </html>`;
+
+            // Create Blob and trigger local download
+            const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'summaries.html';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }); 
     }
 
     // Form submission handler for site search
