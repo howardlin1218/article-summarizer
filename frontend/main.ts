@@ -1307,10 +1307,10 @@ document.addEventListener('DOMContentLoaded', function(): void {
             //     return;
             // }
 
-            if (values.websites.length === 0) {
-                alert('Please select at least one website');
-                return;
-            }
+            // if (values.websites.length === 0) {
+            //     alert('Please select at least one website');
+            //     return;
+            // }
 
             // Show loading state
             const submitButton = databaseSearchForm.querySelector('button[type="submit"]') as HTMLButtonElement;

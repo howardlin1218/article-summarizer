@@ -34,7 +34,7 @@ def get_recent_10_articles():
         response = (
             supabase.table("articles")
             .select("content, url")
-            .order("created_at", desc=False)
+            .order("created_at", desc=True)
             .limit(10)
             .execute()
         )
@@ -82,7 +82,7 @@ def search_for_articles(websites, search_terms, limit, keywords, urls, start_dat
         if limit != 0: 
             query = query.limit(limit)
 
-        query = query.order("created_at", desc=True)
+        query = query.order("created_at", desc=False)
 
         response = query.execute()
         return ensure_preview_in_content(response.data)

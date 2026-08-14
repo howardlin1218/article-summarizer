@@ -58,6 +58,7 @@ app = FastAPI(title="Article Summarizer API", lifespan=lifespan)
 # CORS Configuration
 origins = [
     "http://127.0.0.1:5501",
+    "http://127.0.0.1:5500",
     "https://www.summarizer.howard1218.site",
     "https://summarizer.howard1218.site"
 ]
@@ -209,7 +210,17 @@ async def search_site_stream(payload: SearchSiteRequest, request: Request, respo
         # Stage 4: Complete & Render Output
         yield f"data: {json.dumps({'stage': 4, 'step': 'complete', 'message': 'Summarization complete!', 'progress': 100, 'status': 'success', 'html': return_str})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    stream_response = StreamingResponse(event_generator(), media_type="text/event-stream")
+    if not request.cookies.get("user_session_id"):
+        is_prod = os.getenv("FLASK_ENV") == "production"
+        stream_response.set_cookie(
+            key="user_session_id",
+            value=user_id,
+            httponly=True,
+            samesite="lax",
+            secure=is_prod
+        )
+    return stream_response
 
 @app.get("/api/recent-saves")
 async def get_recent_articles(request: Request, response: Response):
