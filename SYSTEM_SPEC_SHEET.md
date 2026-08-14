@@ -1,14 +1,10 @@
-# System Specification & Architecture Sheet
+# System Specification & Architecture
 
-This specification sheet documents the complete design, implementation details, data flow, rate-limit resilience, and full-stack architecture of the **Article Summarizer & Sentiment Analysis Platform**. It serves as an authoritative reference for technical review and for crafting high-impact resume bullet points.
-
----
-
-## 🗺️ System Overview & Architecture Diagram
+## System Overview & Architecture Diagram
 
 The system is a full-stack, AI-powered intelligence platform that scrapes articles from 8 premier technology news publications, streams real-time progress updates via Server-Sent Events (SSE), executes high-concurrency LLM analysis via Groq (`llama-3.3-70b-versatile` with `llama-3.1-8b-instant` fallback) and Google Vertex AI, persists structured records to Supabase PostgreSQL, and dispatches email digests via Resend.
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                                   FRONTEND LAYER                                       │
 │  [index.html] [main.ts / main.js] [styles.css]                                         │
@@ -36,7 +32,7 @@ The system is a full-stack, AI-powered intelligence platform that scrapes articl
 
 ---
 
-## 🧰 Technology Stack
+## Technology Stack
 
 ### Backend & Core Services
 * **Language & Runtime**: Python 3.11+
@@ -68,7 +64,7 @@ The system is a full-stack, AI-powered intelligence platform that scrapes articl
 ### Email Service & Messaging
 * **Email API Service**: Resend API (`resend` SDK)
 * **Validation**: Strict regex recipient email validator (`is_valid_email`)
-* **Domain Authentication**: Verified custom domain sender (`summaries@howard1218.site`)
+* **Domain Authentication**: Verified custom domain sender
 
 ### Frontend Architecture
 * **Language**: TypeScript (compiled to ES6 JavaScript via `npx tsc`)
@@ -79,35 +75,35 @@ The system is a full-stack, AI-powered intelligence platform that scrapes articl
 
 ---
 
-## 📁 Key File Map
+## Key File Map
 
-### Backend Directory ([backend/](file:///c:/Users/uwupi/article-summarizer/backend))
-*   [app.py](file:///c:/Users/uwupi/article-summarizer/backend/app.py) — FastAPI application instance, Server-Sent Events streaming route (`/api/search-site-stream`), async route handlers, CORS middleware, and cookie session tracking.
-*   [schemas.py](file:///c:/Users/uwupi/article-summarizer/backend/schemas.py) — Pydantic request models (`SearchSiteRequest`, `SearchDatabaseRequest`, `SaveDatabaseRequest`, `EmailRequest`).
-*   [methods.py](file:///c:/Users/uwupi/article-summarizer/backend/methods.py) — Async LLM summarization & sentiment analysis pipeline (`AsyncGroq`), single combined prompt builder, retry/fallback handler, security guardrails, and Resend email client.
-*   [search.py](file:///c:/Users/uwupi/article-summarizer/backend/search.py) — Web scraping engine supporting 8 tech publications, OpenGraph preview extractor, date tuple range comparator, and timezone/date parser.
-*   [database.py](file:///c:/Users/uwupi/article-summarizer/backend/database.py) — Supabase PostgreSQL integration layer, multi-criteria search queries, article upsert logic, and backfill content migrator.
-*   [auto_email_send.py](file:///c:/Users/uwupi/article-summarizer/backend/auto_email_send.py) — Standalone automated recurring digest CLI script for hardware monitoring.
+### Backend Directory (`backend/`)
+*   [`app.py`](backend/app.py) — FastAPI application instance, Server-Sent Events streaming route (`/api/search-site-stream`), async route handlers, CORS middleware, and cookie session tracking.
+*   [`schemas.py`](backend/schemas.py) — Pydantic request models (`SearchSiteRequest`, `SearchDatabaseRequest`, `SaveDatabaseRequest`, `EmailRequest`).
+*   [`methods.py`](backend/methods.py) — Async LLM summarization & sentiment analysis pipeline (`AsyncGroq`), single combined prompt builder, retry/fallback handler, security guardrails, and Resend email client.
+*   [`search.py`](backend/search.py) — Web scraping engine supporting 8 tech publications, OpenGraph preview extractor, date tuple range comparator, and timezone/date parser.
+*   [`database.py`](backend/database.py) — Supabase PostgreSQL integration layer, multi-criteria search queries, article upsert logic, and backfill content migrator.
+*   [`auto_email_send.py`](backend/auto_email_send.py) — Standalone automated recurring digest CLI script for hardware monitoring.
 
-### Backend Test Suite ([backend/tests/](file:///c:/Users/uwupi/article-summarizer/backend/tests))
-*   [conftest.py](file:///c:/Users/uwupi/article-summarizer/backend/tests/conftest.py) — Pytest fixtures, `TestClient` initialization, and warning filters.
-*   [test_scrapers.py](file:///c:/Users/uwupi/article-summarizer/backend/tests/test_scrapers.py) — Dedicated test suite for all 8 web scrapers testing HTML DOM parsing and future, past, and exact date ranges.
-*   [test_search_site.py](file:///c:/Users/uwupi/article-summarizer/backend/tests/test_search_site.py) — Security prompt guardrails, Pydantic validation errors, SSE stream endpoint tests, combined prompt parsing, and 429 retry/fallback tests.
-*   [test_database.py](file:///c:/Users/uwupi/article-summarizer/backend/tests/test_database.py) — Database save (404 and 200), recent saves, all saved, and search database tests.
-*   [test_email.py](file:///c:/Users/uwupi/article-summarizer/backend/tests/test_email.py) — Email validation and Resend provider mock tests.
-*   [test_health.py](file:///c:/Users/uwupi/article-summarizer/backend/tests/test_health.py) — API health check test.
+### Backend Test Suite (`backend/tests/`)
+*   [`conftest.py`](backend/tests/conftest.py) — Pytest fixtures, `TestClient` initialization, and warning filters.
+*   [`test_scrapers.py`](backend/tests/test_scrapers.py) — Dedicated test suite for all 8 web scrapers testing HTML DOM parsing and future, past, and exact date ranges.
+*   [`test_search_site.py`](backend/tests/test_search_site.py) — Security prompt guardrails, Pydantic validation errors, SSE stream endpoint tests, combined prompt parsing, and 429 retry/fallback tests.
+*   [`test_database.py`](backend/tests/test_database.py) — Database save (404 and 200), recent saves, all saved, and search database tests.
+*   [`test_email.py`](backend/tests/test_email.py) — Email validation and Resend provider mock tests.
+*   [`test_health.py`](backend/tests/test_health.py) — API health check test.
 
-### Frontend Directory ([frontend/](file:///c:/Users/uwupi/article-summarizer/frontend))
-*   [index.html](file:///c:/Users/uwupi/article-summarizer/frontend/index.html) — Single-page dashboard markup featuring dual search cards, real-time progress card, custom dropdown menus, email modal, and action control bar.
-*   [main.ts](file:///c:/Users/uwupi/article-summarizer/frontend/main.ts) — TypeScript client logic handling SSE stream reading, LocalStorage caching, dynamic DOM updates, HTML file generation, and smooth button transitions.
-*   [styles.css](file:///c:/Users/uwupi/article-summarizer/frontend/styles.css) — Modern dark-mode design system with responsive grid/flexbox layouts, progress animations, and glowing step badges.
+### Frontend Directory (`frontend/`)
+*   [`index.html`](frontend/index.html) — Single-page dashboard markup featuring dual search cards, real-time progress card, custom dropdown menus, email modal, and action control bar.
+*   [`main.ts`](frontend/main.ts) — TypeScript client logic handling SSE stream reading, LocalStorage caching, dynamic DOM updates, HTML file generation, and smooth button transitions.
+*   [`styles.css`](frontend/styles.css) — Modern dark-mode design system with responsive grid/flexbox layouts, progress animations, and glowing step badges.
 
 ---
 
-## 🛠️ Feature & Implementation Specifications
+## Feature & Implementation Specifications
 
 ### 1. Web Scraping & Date Tuple Comparison Engine
-*   **Implementation File**: [search.py](file:///c:/Users/uwupi/article-summarizer/backend/search.py)
+*   **Implementation File**: [`backend/search.py`](backend/search.py)
 *   **Supported Publications**: Tom's Hardware, PC Mag, The PC Enthusiast, HotHardware, PC Perspective, GameRant, Windows Central, TechRadar.
 *   **Tuple Range Filtering**:
     *   Replaced 25+ nested `if` statements with `is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to)`:
@@ -122,7 +118,7 @@ The system is a full-stack, AI-powered intelligence platform that scrapes articl
     *   Resolves relative media links using `urllib.parse.urljoin` and truncates descriptions at 200 characters for visual uniformity.
 
 ### 2. High-Throughput LLM Pipeline & Rate-Limit Resilience
-*   **Implementation File**: [methods.py](file:///c:/Users/uwupi/article-summarizer/backend/methods.py)
+*   **Implementation File**: [`backend/methods.py`](backend/methods.py)
 *   **Single Combined Prompt (50% Token Reduction)**:
     *   `build_combined_prompt` combines the 7-point summary and 3-category sentiment analysis into a single LLM request.
     *   `split_combined_llm_response` cleanly separates the sections into structured HTML containers.
@@ -136,7 +132,7 @@ The system is a full-stack, AI-powered intelligence platform that scrapes articl
     *   Level 2: Intra-article execution via single combined prompt parsing.
 
 ### 3. Server-Sent Events (SSE) Real-Time Progress Streaming
-*   **Implementation Files**: [app.py](file:///c:/Users/uwupi/article-summarizer/backend/app.py), [main.ts](file:///c:/Users/uwupi/article-summarizer/frontend/main.ts)
+*   **Implementation Files**: [`backend/app.py`](backend/app.py), [`frontend/main.ts`](frontend/main.ts)
 *   **Backend Generator**:
     *   `POST /api/search-site-stream` yields chunked JSON events:
         - Stage 1 (25%): Searching target publications.
@@ -148,7 +144,7 @@ The system is a full-stack, AI-powered intelligence platform that scrapes articl
     *   Smooth CSS transition swaps the "Search Articles" submit button for the glowing progress tracker when clicked.
 
 ### 4. Prompt Guardrails & Security System
-*   **Implementation File**: [methods.py](file:///c:/Users/uwupi/article-summarizer/backend/methods.py)
+*   **Implementation File**: [`backend/methods.py`](backend/methods.py)
 *   **Security Function**: `is_safe_and_relevant_prompt`
 *   **Mitigation Strategy**:
     *   **Jailbreak Mitigation**: Rejects phrases like "ignore previous instructions", "system prompt", "dan mode", and "developer mode".
@@ -156,7 +152,7 @@ The system is a full-stack, AI-powered intelligence platform that scrapes articl
     *   **Scope Enforcement**: Ensures prompts remain focused on summarization and sentiment tasks.
 
 ### 5. Persistence & Database Search Engine
-*   **Implementation File**: [database.py](file:///c:/Users/uwupi/article-summarizer/backend/database.py)
+*   **Implementation File**: [`backend/database.py`](backend/database.py)
 *   **Database Stack**: Supabase PostgreSQL managed via Python SDK (`create_client`).
 *   **Key Operations**:
     *   `insert_to_supabase`: Performs bulk `upsert` on the `articles` table with `on_conflict="url"`.
@@ -184,7 +180,7 @@ tests/test_email.py::test_email_success PASSED                           [ 32%]
 tests/test_email.py::test_email_provider_failure PASSED                  [ 36%]
 tests/test_health.py::test_health_check PASSED                           [ 40%]
 tests/test_scrapers.py::test_toms_hardware_scraping_and_date_ranges PASSED [ 44%]
-tests/test_scrapers.py::test_pc_mag_scraping_and_date_ranges PASSED      [ 48%]
+tests/test_pc_mag_scraping_and_date_ranges PASSED      [ 48%]
 tests/test_the_pc_enthusiast_scraping_and_date_ranges PASSED [ 52%]
 tests/test_hothardware_scraping_and_date_ranges PASSED [ 56%]
 tests/test_pc_perspective_scraping_and_date_ranges PASSED [ 60%]
@@ -201,20 +197,3 @@ tests/test_search_site.py::test_rate_limit_retry_and_fallback PASSED     [100%]
 
 ============================= 25 passed in 2.41s ==============================
 ```
-
----
-
-## 📝 High-Impact Resume Bullet Point Options
-
-### Option Set 1: Full-Stack & Systems Focused
-*   **Architected an automated technology intelligence platform** using FastAPI, Python, TypeScript, and Supabase to scrape, analyze, and persist news articles across 8 premier hardware publications.
-*   **Engineered a real-time event streaming pipeline** using FastAPI Server-Sent Events (SSE) and browser `ReadableStream` reader, providing live 4-stage visual progress tracking (searching, scraping, AI inference, rendering) with smooth UI transitions.
-*   **Optimized LLM token throughput by 50%** by designing a unified prompt architecture and dual-tier model fallback routing (`llama-3.3-70b-versatile` with `llama-3.1-8b-instant`), backed by exponential retry backoff to eliminate HTTP 429 rate limits.
-*   **Accelerated multi-article processing throughput** by designing a non-blocking asynchronous execution engine with `AsyncGroq` and `asyncio.gather()` to process batch summarizations and sentiment classifications in parallel.
-*   **Implemented robust Pydantic data validation & zero-trust prompt security guardrails** to validate API schemas and sanitize custom user prompts against jailbreak attacks and code injection.
-
-### Option Set 2: AI Engineering & Backend Focused
-*   **Developed a high-concurrency FastAPI microservice** integrating `AsyncGroq` (`llama-3.3-70b-versatile` 128k context) and Google Vertex AI to generate structured 7-point executive summaries and 3-category sentiment classifications.
-*   **Eliminated API Rate Limits & Token Overhead**: Designed single-call combined prompting to cut input tokens by 50%, implemented automated exponential backoff, and added seamless model fallback to `llama-3.1-8b-instant` (30k TPM).
-*   **Hardened API Security & Input Validation**: Authored declarative Pydantic request models, safe prompt guardrails (`is_safe_and_relevant_prompt`), and explicit HTTP 404/422 status error handling.
-*   **Built a 25-Test Automated Pytest Suite**: Developed comprehensive mock factory fixtures and benchmark timers verifying web scrapers, date range tuple algorithms, parallel LLM execution, and SSE event streaming.
