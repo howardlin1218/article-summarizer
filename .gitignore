@@ -1,5 +1,19 @@
-.vscode/
+# Virtual Environments
+backend/.venv/
+# Environment Variables & Secrets
+.env
+*.env
 backend/.env
-backend/__pycache__/
+# Node
 node_modules/
-venv/
+# Python Caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+backend/.pytest_cache/
+# IDE & AI Assistant Local Data
+.vscode/
+.antigravity/
+.agents/
+# Scratch directory (optional)
+backend/scratch/

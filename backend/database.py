@@ -1,7 +1,7 @@
 from supabase import create_client, Client
 import os 
 from dotenv import load_dotenv
-from methods import json_dict, email_dict, website_urls
+from methods import website_urls
 import requests
 from bs4 import BeautifulSoup
 from search import extract_link_preview_metadata

@@ -106,10 +106,9 @@ async function makeApiRequest_save(endpoint: string, data: string[]): Promise<Ap
     }
 }
 
-// Function to make API requests for site search
-async function makeApiRequest(endpoint: string, data: SearchValues): Promise<ApiResponse> {
+// Function to make API requests for site search with real-time SSE progress
+async function makeApiRequest_stream(endpoint: string, data: SearchValues, onProgress: (event: any) => void): Promise<ApiResponse> {
     const url = `${API_BASE_URL}${endpoint}`;
-    console.log(url)
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -119,13 +118,112 @@ async function makeApiRequest(endpoint: string, data: SearchValues): Promise<Api
             body: JSON.stringify(data),
             credentials: 'include'
         });
-        return await response.json();
+
+        if (!response.ok) {
+            const errJson = await response.json();
+            return {
+                status: 'error',
+                message: errJson.detail || 'Request failed',
+                html: ''
+            };
+        }
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let finalResponse: ApiResponse = { status: 'success', message: 'completed', html: '' };
+
+        if (reader) {
+            let buffer = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const eventData = JSON.parse(line.slice(6));
+                            onProgress(eventData);
+                            if (eventData.html !== undefined) {
+                                finalResponse.html = eventData.html;
+                                finalResponse.status = eventData.status || 'success';
+                            }
+                        } catch (e) {
+                            console.error("Failed parsing SSE JSON chunk:", line);
+                        }
+                    }
+                }
+            }
+        }
+        return finalResponse;
     } catch (error) {
         return {
             status: 'error',
             message: 'Network error or server unavailable',
-            html: 'no body'
+            html: ''
         };
+    }
+}
+
+function showSearchProgress(): void {
+    const submitBtn = document.getElementById('searchSubmitBtn');
+    if (submitBtn) {
+        submitBtn.classList.add('btn-hidden');
+    }
+    const container = document.getElementById('searchProgressContainer');
+    if (!container) return;
+    container.classList.remove('hidden');
+    updateSearchProgress(1, 10, 'Initializing search request...');
+    
+    for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById(`step-${i}`);
+        if (el) {
+            el.className = 'progress-step';
+        }
+    }
+}
+
+function updateSearchProgress(stage: number, progressPct: number, message: string): void {
+    const container = document.getElementById('searchProgressContainer');
+    const bar = document.getElementById('progressBar');
+    const msg = document.getElementById('progressMessage');
+    const title = document.getElementById('progressTitle');
+    
+    if (container) container.classList.remove('hidden');
+    if (bar) bar.style.width = `${progressPct}%`;
+    if (msg) msg.textContent = message;
+    
+    if (title) {
+        if (stage === 1) title.textContent = "Searching Target Publications...";
+        else if (stage === 2) title.textContent = "Scraping & Extracting Articles...";
+        else if (stage === 3) title.textContent = "AI Summarization & Sentiment Analysis...";
+        else if (stage === 4) title.textContent = "Summarization Complete!";
+    }
+
+    for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById(`step-${i}`);
+        if (!el) continue;
+        if (i < stage) {
+            el.className = 'progress-step completed';
+        } else if (i === stage) {
+            el.className = 'progress-step active';
+        } else {
+            el.className = 'progress-step';
+        }
+    }
+}
+
+function hideSearchProgress(): void {
+    const container = document.getElementById('searchProgressContainer');
+    if (container) {
+        container.classList.add('hidden');
+    }
+    const submitBtn = document.getElementById('searchSubmitBtn');
+    if (submitBtn) {
+        submitBtn.classList.remove('btn-hidden');
     }
 }
 
@@ -1120,9 +1218,13 @@ document.addEventListener('DOMContentLoaded', function(): void {
             submitButton.disabled = true;
 
             try {
-                // Make API request to backend
-                const response = await makeApiRequest('/search-site', values);
-                if (response.status === 'success') {
+                showSearchProgress();
+                // Make streaming API request to backend
+                const response = await makeApiRequest_stream('/search-site-stream', values, (eventData) => {
+                    updateSearchProgress(eventData.stage, eventData.progress, eventData.message);
+                });
+
+                if (response.status === 'success' && response.html) {
                     displayResults(response);
                 } else {
                     alert(`Error: ${response.message}`);
@@ -1130,6 +1232,9 @@ document.addEventListener('DOMContentLoaded', function(): void {
             } catch (error) {
                 alert('Search failed. Please try again.');
             } finally {
+                setTimeout(() => {
+                    hideSearchProgress();
+                }, 1200);
                 // Restore button state
                 submitButton.textContent = originalText;
                 submitButton.disabled = false;

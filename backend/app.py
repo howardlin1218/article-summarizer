@@ -1,343 +1,301 @@
-from flask import Flask, request, jsonify, session
-from flask_cors import CORS
 import os
-from dotenv import load_dotenv
 import uuid
+import json
+import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime
-import sys
-import signal
+from typing import Dict
 
-try:
-    from methods import construct_message, send_email, is_valid_email, construct_message_gemini, is_safe_and_relevant_prompt # Import your email automation
-    from search import search_all_sites  # Import your scraping logic
-    from database import insert_to_supabase, get_recent_10_articles, search_for_articles, get_all_saved
-except ImportError:
-    print("Warning: Could not import some modules. Make sure database.py, search.py, and methods.py exist.")
-# User-specific dictionaries keyed by session ID
-session_json_dicts = {}
-session_email_dicts = {}
+from fastapi import FastAPI, Request, Response, HTTPException, status
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
-def get_user_session_id():
-    if 'user_session_id' not in session:
-        session['user_session_id'] = str(uuid.uuid4())
-    return session['user_session_id']
-
-
-# comma_splitter = re.compile(r'\s*\|\\s*')
-now = datetime.now()
-d_year = now.year 
-d_month = now.month
-d_day = now.day
+from schemas import (
+    EmailRequest, SaveDatabaseRequest, SearchSiteRequest, SearchDatabaseRequest
+)
+from methods import (
+    construct_message_async, send_email, is_valid_email, is_safe_and_relevant_prompt
+)
+from search import search_all_sites
+from database import (
+    insert_to_supabase, get_recent_10_articles, search_for_articles, get_all_saved
+)
 
 load_dotenv()
 
-app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY")
-is_prod = os.getenv("FLASK_ENV") == "production"
-app.config.update(
-    SESSION_COOKIE_SECURE=is_prod,
-    SESSION_COOKIE_SAMESITE='Lax'
-)
-#CORS(app, origins=['https://www.summarizer.howard1218.site/'], supports_credentials=True)  # Enable CORS for frontend communication 
-CORS(app, origins=[
-    "http://127.0.0.1:5500",
-    "https://www.summarizer.howard1218.site",
-    "https://summarizer.howard1218.site"
-], supports_credentials=True)
-@app.route('/api/email-to-user', methods=['POST'])
-def email_to_user():
-    try:
-        payload = request.get_json()
-        if not payload:
-            return jsonify({"status": "error", "message": "Invalid JSON"}), 400
-        
-        article_ids = payload.get("data", [])
-        email_address = payload.get("email_address")
-        
-        # 1. Check if the email field exists or is empty
-        if not email_address or email_address.strip() == "":
-            return jsonify({
-                "status": "error",
-                "message": "Email address is required."
-            }), 400 # 400 = Bad Request
+# User-specific dictionaries keyed by session ID
+session_json_dicts: Dict[str, dict] = {}
+session_email_dicts: Dict[str, dict] = {}
 
-        # 2. Check if the format is actually an email
-        if not is_valid_email(email_address):
-            return jsonify({
-                "status": "error",
-                "message": "Please provide a valid email address."
-            }), 400
+def get_or_create_session_id(request: Request, response: Response) -> str:
+    session_id = request.cookies.get("user_session_id")
+    if not session_id:
+        session_id = str(uuid.uuid4())
+        is_prod = os.getenv("FLASK_ENV") == "production"
+        response.set_cookie(
+            key="user_session_id",
+            value=session_id,
+            httponly=True,
+            samesite="lax",
+            secure=is_prod
+        )
+    return session_id
 
-        # 3. Check if there is actually data to send
-        if not article_ids:
-            return jsonify({
-                "status": "error",
-                "message": "No articles selected to summarize."
-            }), 400
-            
-        user_id = get_user_session_id()
-        user_email_dict = session_email_dicts.setdefault(user_id, {})
-
-        email_html_content = ""
-        
-        for article_id in article_ids:
-            content = user_email_dict.get(article_id, "<p>Article content not found.</p>")
-            email_html_content += content
-        
-        success = send_email(email_content_html=email_html_content, recipient_emails=email_address)
-        
-        if success:
-            return jsonify({
-                "status": "success", 
-                "message": "email successfully sent"
-            }), 200
-        else:
-            # This catches cases where Resend rejected the API key or domain
-            return jsonify({
-                "status": "sending error",
-                "message": "The email provider rejected the request."
-            }), 502 # 502 means Bad Gateway (problem with the 3rd party service)
-            
-    except Exception as e:
-        print(f"Server Error: {str(e)}")
-        return jsonify({
-            'status': 'sending error',
-            'message': 'Server error: ' + str(e)
-        }), 500
-    
-@app.route('/api/save-to-database', methods=['POST'])
-def save_to_database():
-    try:
-        payload = request.get_json()
-        user_id = get_user_session_id()
-        user_json_dict = session_json_dicts.setdefault(user_id, {})
-        list_of_json_data = [user_json_dict[article_id] for article_id in article_ids if article_id in user_json_dict]
-        if list_of_json_data:
-            insert_to_supabase(list_of_json_data)
-        return jsonify({"status": "success", 
-                        "message": "saved successfully to database"
-                        }), 200
-    except Exception as e:
-        print(str(e))
-        return jsonify({
-            'status': 'saving error',
-            'message': str(e)
-        }), 500
-
-
-    
-@app.route('/api/search-site', methods=['POST'])
-def search_site():
-    """Handle site search requests from frontend"""
-    try:
-        data = request.get_json()
-        
-        # Extract search parameters
-        websites = [int(x) for x in data.get('websites', ["0"])]
-        search_terms = data.get('searchTerms', "MSI")
-        limit = data.get('limit', 1)
-        day_from = data.get('day_from', 1)
-        month_from = data.get('month_from', 1)
-        year_from = data.get('year_from', 2025)
-        day_to = data.get('day_to', d_day)
-        month_to = data.get('month_to', d_month)
-        year_to = data.get('year_to', d_year)
-        keywords = data.get('keywords', "")
-        custom_prompt = data.get('customPrompt', "")
-
-        if custom_prompt and not is_safe_and_relevant_prompt(custom_prompt):
-            return jsonify({
-                "status": "error",
-                "message": "Inappropriate or irrelevant custom prompt. Your prompt must be strictly related to summarizing, analyzing, or processing text from the articles."
-            }), 400
-
-        # print("day from: ", day_from)
-        # print("month from: ", month_from)
-        # print("year from: ", year_from)
-
-        # print("day to: ", day_to)
-        # print("month to: ", month_to)
-        # print("year to: ", year_to)
-        
-        if keywords:
-            keywords = [kw.strip() for kw in keywords.split(",") if kw.strip()]
-        else: 
-            keywords = []
-        
-        if search_terms:
-            search_terms = [kw.strip() for kw in search_terms.split("|") if kw.strip()]
-        else: 
-            search_terms = []
-
-        # Log the search request
-        print(f"Site search request: {search_terms} on {len(websites)} websites: {websites}, limit:{limit}")
-        results_list = search_all_sites(search_terms=search_terms, article_limit=limit, year_from=year_from, month_from=month_from, day_from=day_from, year_to=year_to, month_to=month_to, day_to=day_to, sites_to_search=websites, keywords=keywords)
-                
-        user_id = get_user_session_id()
-        user_json_dict = session_json_dicts.setdefault(user_id, {})
-        user_email_dict = session_email_dicts.setdefault(user_id, {})
-
-        # return_str = construct_message_gemini(results_list=results_list, custom_prompt=custom_prompt, json_dict=user_json_dict, email_dict=user_email_dict)
-        return_str = construct_message(results_list=results_list, custom_prompt=custom_prompt, json_dict=user_json_dict, email_dict=user_email_dict)
-        
-        return jsonify({"status": "success", 
-                        "message": "returning json",
-                        "html": return_str
-                        }), 200
-        
-    except Exception as e:
-        print(str(e))
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-@app.route('/api/recent-saves', methods=['GET'])
-def get_recent_articles():
-    try:
-        response = get_recent_10_articles()
-        user_id = get_user_session_id()
-        user_email_dict = session_email_dicts.setdefault(user_id, {})
-        for dict in response: 
-            input_tag = f"<input value='{dict['url']}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n"
-            for_email_html = dict['content'].replace(input_tag, "")
-
-            user_email_dict[dict['url']] = for_email_html
-
-        return jsonify({"status": "success", 
-                        "message": "got 10 most recent articles saved",
-                        "html": "".join(article.get("content", "") for article in response)
-                        }), 200
-    except Exception as e:
-        print(str(e))
-        return jsonify({
-            'status': 'error fetching from database',
-            'message': str(e)
-        }), 500
-
-@app.route('/api/all-saved', methods=['GET'])
-def get_all_saved_articles():
-    try:
-        response = get_all_saved()
-        user_id = get_user_session_id()
-        user_email_dict = session_email_dicts.setdefault(user_id, {})
-        for dict in response: 
-            input_tag = f"<input value='{dict['url']}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n"
-            for_email_html = dict['content'].replace(input_tag, "")
-
-            user_email_dict[dict['url']] = for_email_html
-
-        return jsonify({"status": "success", 
-                        "message": "got all saved articles",
-                        "html": "".join(article.get("content", "") for article in response)
-                        }), 200
-    except Exception as e:
-        print(str(e))
-        return jsonify({
-            'status': 'error fetching from database',
-            'message': str(e)
-        }), 500
-    
-@app.route('/api/search-database', methods=['POST'])
-def search_database():
-    """Handle database search requests from frontend"""
-    try:
-        data = request.get_json()
-        
-        # Extract search parameters
-        websites = data.get('websites', ["Tom's Hardware"]) # required
-        search_terms = data.get('searchTerms', "MSI")
-        limit = data.get('limit', 0) # optional
-        keywords = data.get('keywords', "") # optional
-        urls = data.get('urls', "") # optional
-        day_from = data.get('day_from', 0) # optional
-        month_from = data.get('month_from', 0) # optional
-        year_from = data.get('year_from', 0) # optional
-        day_to = data.get('day_to', 0) # optional
-        month_to = data.get('month_to', 0) # optional
-        year_to = data.get('year_to', 0) # optional
-
-        # print("day from: ", day_from)
-        # print("month from: ", month_from)
-        # print("year from: ", year_from)
-
-        # print("day to: ", day_to)
-        # print("month to: ", month_to)
-        # print("year to: ", year_to)
-
-        start_date = 0
-        end_date = 0
-        if year_from != 0 and month_from != 0 and day_from != 0:
-            start_date = f"{year_from}-{month_from:02}-{day_from:02}"
-
-        if year_to != 0 and month_to != 0 and day_to != 0:  
-            end_date = f"{year_to}-{month_to:02}-{day_to:02}"
-        
-        # print(start_date, end_date)
-        if keywords != "":
-            keywords = [kw.strip() for kw in keywords.split(",") if kw.strip()]
-        else: 
-            keywords = []
-
-        if urls != "":
-            urls = urls.strip().replace(" ", "").split(",")
-        else: 
-            urls = []
-        
-        # print("websites: ", websites)
-        # print("search terms: ", search_terms)
-        # print("limit: ", limit)
-        # print("day: ", day)
-        # print("month: ", month)
-        # print("year: ", year)
-        # print("keywords: ", keywords)
-        # print("urls: ", urls)
-
-        # Log the search request
-        print(f"Database search request: matching titles with {search_terms} with limit of {limit}")
-        response = search_for_articles(websites, search_terms, limit, keywords, urls, start_date, end_date)
-        
-        user_id = get_user_session_id()
-        user_email_dict = session_email_dicts.setdefault(user_id, {})
-        for dict in response: 
-            input_tag = f"<input value='{dict['url']}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n"
-            for_email_html = dict['content'].replace(input_tag, "")
-            user_email_dict[dict['url']] = for_email_html
-
-        # Here you can integrate with your existing database functions
-        return jsonify({"status": "success", 
-                        "message": "returning json",
-                        "html": "".join(article.get("content", "") for article in response)
-                        }), 200
-        
-    except Exception as e:
-        print(str(e))
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Simple health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat()
-    })
-
-def graceful_shutdown(sig, frame):
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    yield
+    # Graceful Shutdown logic (flushes remaining session memory to database)
     all_articles = []
     for user_dict in session_json_dicts.values():
         all_articles.extend(user_dict.values())
     if all_articles:
-        insert_to_supabase(all_articles)
-    sys.exit(0)
+        await asyncio.to_thread(insert_to_supabase, all_articles)
 
-signal.signal(signal.SIGINT, graceful_shutdown)  # Ctrl+C
-signal.signal(signal.SIGTERM, graceful_shutdown)
+app = FastAPI(title="Article Summarizer API", lifespan=lifespan)
 
-if __name__ == '__main__':
-    #populate_fields()
-    # app.run(debug=False, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+# CORS Configuration
+origins = [
+    "http://127.0.0.1:5501",
+    "https://www.summarizer.howard1218.site",
+    "https://summarizer.howard1218.site"
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    app.run(debug=True, host='127.0.0.1', port=5000) 
+@app.post("/api/email-to-user")
+async def email_to_user(payload: EmailRequest, request: Request, response: Response):
+    if not payload.email_address or not is_valid_email(payload.email_address):
+        raise HTTPException(status_code=400, detail="Please provide a valid email address.")
+    if not payload.data:
+        raise HTTPException(status_code=400, detail="No articles selected to summarize.")
+
+    user_id = get_or_create_session_id(request, response)
+    user_email_dict = session_email_dicts.setdefault(user_id, {})
+
+    email_html_content = "".join(
+        user_email_dict.get(art_id, "<p>Article content not found.</p>") for art_id in payload.data
+    )
+
+    success = await asyncio.to_thread(send_email, email_html_content, payload.email_address)
+    if not success:
+        raise HTTPException(status_code=502, detail="The email provider rejected the request.")
+
+    return {"status": "success", "message": "email successfully sent"}
+
+@app.post("/api/save-to-database")
+async def save_to_database(payload: SaveDatabaseRequest, request: Request, response: Response):
+    user_id = get_or_create_session_id(request, response)
+    user_json_dict = session_json_dicts.setdefault(user_id, {})
+    
+    list_of_json_data = [user_json_dict[art_id] for art_id in payload.data if art_id in user_json_dict]
+    if not list_of_json_data:
+        raise HTTPException(
+            status_code=404,
+            detail="No matching articles found in current session memory to save."
+        )
+        
+    await asyncio.to_thread(insert_to_supabase, list_of_json_data)
+    return {"status": "success", "message": f"Saved {len(list_of_json_data)} article(s) successfully to database"}
+
+@app.post("/api/search-site")
+async def search_site(payload: SearchSiteRequest, request: Request, response: Response):
+    if payload.customPrompt and not is_safe_and_relevant_prompt(payload.customPrompt):
+        raise HTTPException(
+            status_code=400,
+            detail="Inappropriate or irrelevant custom prompt. Your prompt must be strictly related to summarizing, analyzing, or processing text from the articles."
+        )
+
+    keywords_list = [kw.strip() for kw in payload.keywords.split(",") if kw.strip()] if payload.keywords else []
+    search_terms_list = [kw.strip() for kw in payload.searchTerms.split("|") if kw.strip()] if payload.searchTerms else []
+
+    now = datetime.now()
+    year_to = payload.year_to if payload.year_to != 0 else now.year
+    month_to = payload.month_to if payload.month_to != 0 else now.month
+    day_to = payload.day_to if payload.day_to != 0 else now.day
+
+    # Run blocking scrapers in background thread pool to keep asyncio event loop responsive
+    results_list = await asyncio.to_thread(
+        search_all_sites,
+        search_terms=search_terms_list,
+        article_limit=payload.limit,
+        year_from=payload.year_from,
+        month_from=payload.month_from,
+        day_from=payload.day_from,
+        year_to=year_to,
+        month_to=month_to,
+        day_to=day_to,
+        sites_to_search=payload.websites,
+        keywords=keywords_list
+    )
+
+    user_id = get_or_create_session_id(request, response)
+    user_json_dict = session_json_dicts.setdefault(user_id, {})
+    user_email_dict = session_email_dicts.setdefault(user_id, {})
+
+    return_str = await construct_message_async(
+        results_list=results_list,
+        keywords=keywords_list,
+        custom_prompt=payload.customPrompt,
+        json_dict=user_json_dict,
+        email_dict=user_email_dict
+    )
+
+    return {"status": "success", "message": "returning json", "html": return_str}
+
+@app.post("/api/search-site-stream")
+async def search_site_stream(payload: SearchSiteRequest, request: Request, response: Response):
+    if payload.customPrompt and not is_safe_and_relevant_prompt(payload.customPrompt):
+        raise HTTPException(
+            status_code=400,
+            detail="Inappropriate or irrelevant custom prompt. Your prompt must be strictly related to summarizing, analyzing, or processing text from the articles."
+        )
+
+    user_id = get_or_create_session_id(request, response)
+
+    async def event_generator():
+        # Stage 1: Searching Target Websites
+        yield f"data: {json.dumps({'stage': 1, 'step': 'searching', 'message': 'Searching target publication websites...', 'progress': 25})}\n\n"
+        await asyncio.sleep(0.05)
+
+        keywords_list = [kw.strip() for kw in payload.keywords.split(",") if kw.strip()] if payload.keywords else []
+        search_terms_list = [kw.strip() for kw in payload.searchTerms.split("|") if kw.strip()] if payload.searchTerms else []
+
+        now = datetime.now()
+        year_to = payload.year_to if payload.year_to != 0 else now.year
+        month_to = payload.month_to if payload.month_to != 0 else now.month
+        day_to = payload.day_to if payload.day_to != 0 else now.day
+
+        results_list = await asyncio.to_thread(
+            search_all_sites,
+            search_terms=search_terms_list,
+            article_limit=payload.limit,
+            year_from=payload.year_from,
+            month_from=payload.month_from,
+            day_from=payload.day_from,
+            year_to=year_to,
+            month_to=month_to,
+            day_to=day_to,
+            sites_to_search=payload.websites,
+            keywords=keywords_list
+        )
+
+        # Stage 2: Scraping & Extracting Article Content
+        total_articles = sum(len(res) for res in results_list.values())
+        msg = f"Extracted {total_articles} matching article(s). Parsing DOM & metadata..." if total_articles > 0 else "No matching articles found."
+        yield f"data: {json.dumps({'stage': 2, 'step': 'scraping', 'message': msg, 'progress': 50, 'article_count': total_articles})}\n\n"
+        await asyncio.sleep(0.05)
+
+        # Stage 3: AI Summarization & Sentiment Analysis
+        yield f"data: {json.dumps({'stage': 3, 'step': 'summarizing', 'message': f'Running parallel Groq LLM summarization & sentiment analysis for {total_articles} article(s)...', 'progress': 75})}\n\n"
+
+        user_json_dict = session_json_dicts.setdefault(user_id, {})
+        user_email_dict = session_email_dicts.setdefault(user_id, {})
+
+        return_str = await construct_message_async(
+            results_list=results_list,
+            keywords=keywords_list,
+            custom_prompt=payload.customPrompt,
+            json_dict=user_json_dict,
+            email_dict=user_email_dict
+        )
+
+        # Stage 4: Complete & Render Output
+        yield f"data: {json.dumps({'stage': 4, 'step': 'complete', 'message': 'Summarization complete!', 'progress': 100, 'status': 'success', 'html': return_str})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@app.get("/api/recent-saves")
+async def get_recent_articles(request: Request, response: Response):
+    res_data = await asyncio.to_thread(get_recent_10_articles)
+    if isinstance(res_data, int):
+        raise HTTPException(status_code=500, detail="Error fetching from database")
+        
+    user_id = get_or_create_session_id(request, response)
+    user_email_dict = session_email_dicts.setdefault(user_id, {})
+    
+    for item in res_data:
+        content = item.get("content") or ""
+        url = item.get("url") or ""
+        input_tag = f"<input value='{url}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n"
+        user_email_dict[url] = content.replace(input_tag, "")
+
+    return {
+        "status": "success",
+        "message": "got 10 most recent articles saved",
+        "html": "".join(art.get("content") or "" for art in res_data)
+    }
+
+@app.get("/api/all-saved")
+async def get_all_saved_articles(request: Request, response: Response):
+    res_data = await asyncio.to_thread(get_all_saved)
+    if isinstance(res_data, int):
+        raise HTTPException(status_code=500, detail="Error fetching from database")
+
+    user_id = get_or_create_session_id(request, response)
+    user_email_dict = session_email_dicts.setdefault(user_id, {})
+    
+    for item in res_data:
+        content = item.get("content") or ""
+        url = item.get("url") or ""
+        input_tag = f"<input value='{url}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n"
+        user_email_dict[url] = content.replace(input_tag, "")
+
+    return {
+        "status": "success",
+        "message": "got all saved articles",
+        "html": "".join(art.get("content") or "" for art in res_data)
+    }
+
+@app.post("/api/search-database")
+async def search_database(payload: SearchDatabaseRequest, request: Request, response: Response):
+    start_date = 0
+    end_date = 0
+    if payload.year_from != 0 and payload.month_from != 0 and payload.day_from != 0:
+        start_date = f"{payload.year_from}-{payload.month_from:02}-{payload.day_from:02}"
+    if payload.year_to != 0 and payload.month_to != 0 and payload.day_to != 0:
+        end_date = f"{payload.year_to}-{payload.month_to:02}-{payload.day_to:02}"
+
+    keywords_list = [k.strip() for k in payload.keywords.split(",") if k.strip()] if payload.keywords else []
+    urls_list = payload.urls.strip().replace(" ", "").split(",") if payload.urls else []
+
+    res_data = await asyncio.to_thread(
+        search_for_articles,
+        payload.websites,
+        payload.searchTerms,
+        payload.limit,
+        keywords_list,
+        urls_list,
+        start_date,
+        end_date
+    )
+    if isinstance(res_data, int):
+        raise HTTPException(status_code=500, detail="Error searching database")
+
+    user_id = get_or_create_session_id(request, response)
+    user_email_dict = session_email_dicts.setdefault(user_id, {})
+    for item in res_data:
+        content = item.get("content") or ""
+        url = item.get("url") or ""
+        input_tag = f"<input value='{url}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n"
+        user_email_dict[url] = content.replace(input_tag, "")
+
+    return {
+        "status": "success",
+        "message": "returning json",
+        "html": "".join(art.get("content") or "" for art in res_data)
+    }
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app:app", host="127.0.0.1", port=5000, reload=True)

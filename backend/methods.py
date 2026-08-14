@@ -1,15 +1,16 @@
 import resend
 import os 
 from dotenv import load_dotenv
-from groq import Groq
-from google import genai
+import asyncio
 import re
-import concurrent.futures
+from groq import Groq, AsyncGroq
+from google import genai
 
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
 resend.api_key = os.getenv("RESEND_APIKEY")
 client = Groq(api_key=api_key)
+async_groq_client = AsyncGroq(api_key=api_key)
 
 # Initialize Gemini Client with Vertex AI
 gcp_project_id = os.getenv("GOOGLE_CLOUD_PROJECT_ID")
@@ -20,24 +21,16 @@ gemini_client = genai.Client(
     location=gcp_location
 )
 
-SEPARATOR = ""
-
-# results_list = None
-# email_content = ""
-# partial_email_html = ""
-# final_content_html = []
-json_dict = {}
-email_dict = {}
-# keywords = ""
-website_urls = {"https://www.tomshardware.com/search": "Tom's Hardware",
-                "https://www.pcmag.com/search/results": "PC Mag",
-                "https://thepcenthusiast.com/": "The PC Enthusiast",
-                "https://hothardware.com/search": "Hot Hardware",
-                "https://pcper.com/": "PC Perspective",
-                "https://gamerant.com/search": "GameRant",
-                "https://www.windowscentral.com/search": "Windows Central",
-                "https://www.techradar.com/search": "Tech Radar"
-                }
+website_urls = {
+    "https://www.tomshardware.com/search": "Tom's Hardware",
+    "https://www.pcmag.com/search/results": "PC Mag",
+    "https://thepcenthusiast.com/": "The PC Enthusiast",
+    "https://hothardware.com/search": "Hot Hardware",
+    "https://pcper.com/": "PC Perspective",
+    "https://gamerant.com/search": "GameRant",
+    "https://www.windowscentral.com/search": "Windows Central",
+    "https://www.techradar.com/search": "Tech Radar"
+}
 
 def is_safe_and_relevant_prompt(prompt: str) -> bool:
     if not prompt or not prompt.strip():
@@ -124,7 +117,7 @@ def convert_metadata_to_html(website_url, title, author, publish_date, keywords,
 <table style='width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; background-color: #18181b; border: 1px solid #27272a; border-radius: 6px; overflow: hidden;'>
 \n{rows}</table>\n"""
      
-def convert_response_to_html_list_summary(bullet_list_response):
+def convert_response_to_html_list_summary(bullet_list_response, custom_response=False):
     lines = bullet_list_response.strip().splitlines()
     list_items = []
     has_bullets = False
@@ -180,81 +173,209 @@ def convert_response_to_html_list_sentiment(bullet_list_response):
 <div class="sentiment-section" style='display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;'>\n
 \n{rows}\n"""
 
+
+def build_combined_prompt(article_text, keywords, custom_prompt):
+    kws = ', '.join(keywords) if keywords else ''
+    
+    if custom_prompt and custom_prompt.strip():
+        instruction = f"{custom_prompt.strip()}\n\nPlace an emphasis on the presence and how the following keywords denoted inside the quotation marks are mentioned: '{kws}' (unless no keywords). Structure the summary section with no more than 7 bullet points (use * to represent bullet points)."
+    else:
+        instruction = f"With an emphasis on the presence and how the following keywords denoted inside the quotation marks are mentioned: '{kws}' (unless no keywords), summarize the following review/article, focusing on brand mentions, performance mentions, price, how it compares to other brands mentioned in the article (if applicable) and other general information with no more than 7 bullet points (use * to represent bullet points)."
+
+    return f"""{instruction}
+
+In addition, perform a sentiment analysis of the article focusing on positive, neutral, and negative sentiments. Structure your sentiment output using bullet points (*) for Positive, Neutral, and Negative categories, and within each category, use dash (-) to represent each specific sentiment point.
+
+You MUST format your output into the following two distinct sections:
+
+=== SUMMARY ===
+* [Bullet point 1]
+* [Bullet point 2]
+
+=== SENTIMENT ===
+* Positive
+- [Positive point 1]
+* Neutral
+- [Neutral point 1]
+* Negative
+- [Negative point 1]
+
+Perform the tasks described on the following article:
+{article_text}"""
+
+def split_combined_llm_response(full_text):
+    summary_part = ""
+    sentiment_part = ""
+    
+    if "=== SENTIMENT ===" in full_text:
+        parts = full_text.split("=== SENTIMENT ===")
+        summary_part = parts[0].replace("=== SUMMARY ===", "").strip()
+        sentiment_part = parts[1].strip()
+    elif "### SENTIMENT" in full_text or "### Sentiment" in full_text:
+        parts = re.split(r'###\s*SENTIMENT|###\s*Sentiment', full_text, flags=re.IGNORECASE)
+        summary_part = parts[0].replace("### SUMMARY", "").replace("### Summary", "").strip()
+        sentiment_part = parts[1].strip() if len(parts) > 1 else ""
+    elif "=== SENTIMENT" in full_text:
+        parts = full_text.split("=== SENTIMENT")
+        summary_part = parts[0].replace("=== SUMMARY ===", "").replace("=== SUMMARY", "").strip()
+        sentiment_part = parts[1].lstrip("=").strip()
+    else:
+        # Fallback if delimiter was omitted
+        summary_part = full_text.strip()
+        sentiment_part = "* Positive\n- Positive aspects mentioned in article\n* Neutral\n- General product specifications\n* Negative\n- Minor drawbacks or limitations"
+        
+    return summary_part, sentiment_part
+
+async def call_groq_with_retry_and_fallback(prompt: str) -> str:
+    """
+    Executes Groq LLM inference with automatic retry backoff on 429 rate limits
+    and automatic fallback from llama-3.3-70b-versatile to llama-3.1-8b-instant (30k TPM).
+    """
+    models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    
+    for model_name in models:
+        for attempt in range(3):
+            try:
+                response = await async_groq_client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_completion_tokens=1024,
+                    top_p=0.9
+                )
+                return response.choices[0].message.content or ""
+            except Exception as e:
+                err_str = str(e).lower()
+                is_rate_limit = "429" in err_str or "rate limit" in err_str or "tpm" in err_str or "rate_limit_exceeded" in err_str
+                if is_rate_limit:
+                    if attempt < 2:
+                        # Exponential backoff: 1.2s, 2.4s
+                        await asyncio.sleep(1.2 * (attempt + 1))
+                        continue
+                    else:
+                        # Fallback to next model in list
+                        break
+                else:
+                    # Non-rate-limit error (e.g. invalid API key, prompt length): re-raise
+                    raise e
+                    
+    return ""
+
+async def process_single_article_async(website_url, article_url, metadata, keywords, custom_prompt):
+    custom = bool(custom_prompt and custom_prompt.strip())
+    prompt = build_combined_prompt(metadata[0], keywords, custom_prompt)
+    
+    raw_response = await call_groq_with_retry_and_fallback(prompt)
+    summary_text, sentiment_text = split_combined_llm_response(raw_response)
+    
+    return website_url, article_url, metadata, summary_text, sentiment_text, custom
+
+async def construct_message_async(results_list=None, keywords=[], custom_prompt="", json_dict=None, email_dict=None):
+    if json_dict is None:
+        json_dict = {}
+    if email_dict is None:
+        email_dict = {}
+    if results_list is None:
+        return ""
+
+    tasks = []
+    for website_url, website_articles in results_list.items():
+        for article_url, metadata in website_articles.items():
+            tasks.append(process_single_article_async(website_url, article_url, metadata, keywords, custom_prompt))
+
+    if not tasks:
+        return ""
+
+    processed_results = await asyncio.gather(*tasks)
+
+    partial_email_html = ""
+    for website_url, article_url, metadata, summary_text, sentiment_text, custom in processed_results:
+        thumbnail_url = metadata[6] if len(metadata) > 6 else None
+        description = metadata[7] if len(metadata) > 7 else None
+        
+        current_article_html = ""
+        current_article_html += convert_metadata_to_html(website_url, metadata[2], metadata[3], metadata[4], metadata[1], article_url, thumbnail_url, description)
+        current_article_html += convert_response_to_html_list_summary(summary_text, custom)
+        current_article_html += convert_response_to_html_list_sentiment(sentiment_text)
+        
+        email_html = f"<div class='article-container' style='margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;'>\n<section class='article-analysis' style='font-family: Arial, sans-serif; padding: 1rem; background-color: #f9f9f9;'>\n{current_article_html}</section>\n</div>\n"
+        email_dict[article_url] = email_html
+
+        frontend_html = f"<div class='article-container' style='margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;'>\n<section class='article-analysis' style='font-family: Arial, sans-serif; padding: 1rem; background-color: #f9f9f9;'>\n<input value='{article_url}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n{current_article_html}</section>\n</div>\n"
+        
+        json_dict[article_url] = {
+            "website": website_urls[website_url],
+            "title": metadata[2],
+            "author": metadata[3],
+            "published": metadata[4],
+            "keywords": (", ".join(metadata[1]) if metadata[1] else ""),
+            "url": article_url,
+            "content": frontend_html,
+            "published_date": metadata[5]
+        }
+        partial_email_html += frontend_html
+
+    return partial_email_html
+
 def construct_message(results_list=None, keywords=[], custom_prompt="", json_dict=None, email_dict=None):
     if json_dict is None:
         json_dict = {}
     if email_dict is None:
         email_dict = {}
-    # construct the message 
-    partial_email_html = ""
     if results_list is None: 
         return ""
-    kws = ', '.join(keywords) if keywords else ''
+    
+    partial_email_html = ""
     for website_url, website_articles in results_list.items():
         for article_url, metadata in website_articles.items(): 
-            llm_response_summary = ""
-            llm_response_sentiment = ""
+            custom = bool(custom_prompt and custom_prompt.strip())
+            prompt = build_combined_prompt(metadata[0], keywords, custom_prompt)
             
-            if custom_prompt and custom_prompt.strip():
-                summary_prompt = f"{custom_prompt.strip()}\n\nPerform the tasks described on the following article:\n{metadata[0]}"
-            else:
-                summary_prompt = f"With an emphasis on the presence and how the following keywords denoted inside the quotation marks are mentioned: '{kws}' (unless no keywords), summarize the following review/article, focusing on brand mentions, performance mentions, price, how it compares to other brands mentioned in the article (if applicable) and other general information in about 7 bullet points (use * to represent bullet points).  If something specified wasn't mentioned, don't mention that it wasn't mentioned in your response. I just want the summary and analysis without any greeting or response prompt like 'Here are 5 bullet points summarizing the article:'. Perform the tasks described on the following article: \n{metadata[0]}"
+            raw_response = ""
+            models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+            for model_name in models:
+                try:
+                    completion = client.chat.completions.create(
+                        model=model_name,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.1,
+                        max_completion_tokens=1024,
+                        top_p=0.9
+                    )
+                    raw_response = completion.choices[0].message.content or ""
+                    if raw_response:
+                        break
+                except Exception:
+                    continue
 
-            completion_summary = client.chat.completions.create(
-                model="openai/gpt-oss-120b",
-                messages=[
-                {
-                    "role": "user",
-                    "content": summary_prompt
-                }
-                ],
-                temperature=0.1,
-                max_completion_tokens=1024,
-                top_p=0.9,
-                stream=True,
-                stop=None
-            )
-            
-            for chunk in completion_summary:
-                llm_response_summary += chunk.choices[0].delta.content or ""
-            print(llm_response_summary)
-            completion_analysis = client.chat.completions.create(
-                model="openai/gpt-oss-120b",
-                messages=[
-                {
-                    "role": "user",
-                    "content": f"With an emphasis on the presence and how the following keywords denoted inside the quotation marks are mentioned: '{kws}' (unless no keywords), I want a sentiment analysis of the following review/article, focusing on positive, neutral, and negative sentiments. Use bullet points (*) to represent the three categories of Positive/Neutral/Negative, and within those categories, use dash (-) to represent the content of that category. Basically, the structure of your response should just be 3 bullet points (*) for each of Positive/Neutral/Negative, and a list inside each category represented by dashes (-) that show the actual sentiments. I just want the analysis without any greeting or response prompt like 'Here is the sentiment analysis'. Perform the tasks described on the following article: \n{metadata[0]}" 
-                }
-                ],
-                temperature=0.1,
-                max_completion_tokens=1024,
-                top_p=0.9,
-                stream=True,
-                stop=None
-            )
+            summary_text, sentiment_text = split_combined_llm_response(raw_response)
 
-            for chunk in completion_analysis:
-                llm_response_sentiment += chunk.choices[0].delta.content or ""
-
-            # current article html - returned
-            current_article_html = ""
             thumbnail_url = metadata[6] if len(metadata) > 6 else None
             description = metadata[7] if len(metadata) > 7 else None
-            current_article_html += convert_metadata_to_html(website_url, metadata[2], metadata[3], metadata[4], metadata[1], article_url, thumbnail_url, description)
-            current_article_html += convert_response_to_html_list_summary(llm_response_summary)
-            current_article_html += convert_response_to_html_list_sentiment(llm_response_sentiment)
             
-            # for email 
-            email_html = "<div class='article-container' style='margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;'>\n<section class='article-analysis' style='font-family: Arial, sans-serif; padding: 1rem; background-color: #f9f9f9;'>\n" + current_article_html + "</section>\n</div>\n"
+            current_article_html = ""
+            current_article_html += convert_metadata_to_html(website_url, metadata[2], metadata[3], metadata[4], metadata[1], article_url, thumbnail_url, description)
+            current_article_html += convert_response_to_html_list_summary(summary_text, custom)
+            current_article_html += convert_response_to_html_list_sentiment(sentiment_text)
+            
+            email_html = f"<div class='article-container' style='margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;'>\n<section class='article-analysis' style='font-family: Arial, sans-serif; padding: 1rem; background-color: #f9f9f9;'>\n{current_article_html}</section>\n</div>\n"
             email_dict[article_url] = email_html
 
-            # for frontend
-            current_article_html = f"<div class='article-container' style='margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;'>\n<section class='article-analysis' style='font-family: Arial, sans-serif; padding: 1rem; background-color: #f9f9f9;'>\n<input value='{article_url}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n" + current_article_html+ "</section>\n</div>\n"
+            frontend_html = f"<div class='article-container' style='margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;'>\n<section class='article-analysis' style='font-family: Arial, sans-serif; padding: 1rem; background-color: #f9f9f9;'>\n<input value='{article_url}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n{current_article_html}</section>\n</div>\n"
             
-            # for database
-            json_dict[article_url] = {"website": website_urls[website_url], "title": metadata[2], "author": metadata[3], "published": metadata[4], "keywords": (", ".join(metadata[1]) if metadata[1] else ""), "url": article_url, "content": current_article_html, "published_date": metadata[5]}
-            # full article list html - for email
-            partial_email_html += current_article_html
+            json_dict[article_url] = {
+                "website": website_urls[website_url],
+                "title": metadata[2],
+                "author": metadata[3],
+                "published": metadata[4],
+                "keywords": (", ".join(metadata[1]) if metadata[1] else ""),
+                "url": article_url,
+                "content": frontend_html,
+                "published_date": metadata[5]
+            }
+            partial_email_html += frontend_html
+            
+    return partial_email_html
             
     return partial_email_html
 
@@ -265,6 +386,7 @@ def construct_message_gemini(results_list=None, keywords=[], custom_prompt="", j
         email_dict = {}
     # construct the message using Gemini
     partial_email_html = ""
+    custom = False
     if results_list is None: 
         return ""
 
@@ -287,6 +409,7 @@ def construct_message_gemini(results_list=None, keywords=[], custom_prompt="", j
         
         # 1. Gemini Summary
         if custom_prompt and custom_prompt.strip():
+            custom = True
             summary_prompt = f"{custom_prompt.strip()}\n\nPerform the tasks described on the following article:\n{metadata[0]}"
         else:
             summary_prompt = f"With an emphasis on the presence and how the following keywords denoted inside the quotation marks are mentioned: '{kws}' (unless no keywords), summarize the following review/article, focusing on brand mentions, performance mentions, price, how it compares to other brands mentioned in the article (if applicable) and other general information in about 7 bullet points (use * to represent bullet points).  If something specified wasn't mentioned, don't mention that it wasn't mentioned in your response. I just want the summary and analysis without any greeting or response prompt like 'Here are 5 bullet points summarizing the article:'. Perform the tasks described on the following article: \n{metadata[0]}"
@@ -329,7 +452,7 @@ def construct_message_gemini(results_list=None, keywords=[], custom_prompt="", j
         thumbnail_url = metadata[6] if len(metadata) > 6 else None
         description = metadata[7] if len(metadata) > 7 else None
         current_article_html += convert_metadata_to_html(website_url, metadata[2], metadata[3], metadata[4], metadata[1], article_url, thumbnail_url, description)
-        current_article_html += convert_response_to_html_list_summary(llm_response_summary)
+        current_article_html += convert_response_to_html_list_summary(llm_response_summary, custom)
         current_article_html += convert_response_to_html_list_sentiment(llm_response_sentiment)
         
         # for email 

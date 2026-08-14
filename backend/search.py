@@ -24,7 +24,7 @@ def extract_link_preview_metadata(soup, url):
 
     # 2. Try twitter:image
     if not thumbnail_url:
-        twitter_image = soup.find("meta", name="twitter:image") or soup.find("meta", attrs={"property": "twitter:image"})
+        twitter_image = soup.find("meta", attrs={"name": "twitter:image"}) or soup.find("meta", attrs={"property": "twitter:image"})
         if twitter_image and twitter_image.get("content"):
             thumbnail_url = twitter_image["content"]
 
@@ -39,7 +39,7 @@ def extract_link_preview_metadata(soup, url):
 
     # 5. Try meta description
     if not description:
-        meta_desc = soup.find("meta", name="description") or soup.find("meta", attrs={"property": "description"})
+        meta_desc = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "description"})
         if meta_desc and meta_desc.get("content"):
             description = meta_desc["content"]
 
@@ -196,6 +196,23 @@ def match_keywords(article_text, kws):
             return []
     return found
 
+def is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
+    """
+    Validates if (m_year, m_month, m_day) falls within [date_from, date_to] using Python tuple comparison.
+    """
+    article_date = (m_year, m_month, m_day)
+    start_date = (year_from, month_from, day_from)
+    
+    if start_date != (0, 0, 0) and article_date < start_date:
+        return False
+        
+    if (year_to, month_to, day_to) != (0, 0, 0):
+        end_date = (year_to, month_to, day_to)
+        if article_date > end_date:
+            return False
+            
+    return True
+
 def search_toms_hardware(website_url=website_urls[0], search_terms=search_terms, article_limit=1, word_limit=500, year_from=year, month_from=month, day_from=day, year_to=year, month_to=month, day_to=day, keywords=[]): 
     matched_article_metadata = defaultdict(list)
     for term in range(len(search_terms)):
@@ -240,35 +257,18 @@ def search_toms_hardware(website_url=website_urls[0], search_terms=search_terms,
                     parsed_date = splitter.split(publish_date)
 
                     if parsed_date[-1] != 'ago': 
-                        if int("20"+parsed_date[-1]) < year_from:
-                            continue
-                        if int("20"+parsed_date[-1]) == year_from:
-                            if months[parsed_date[1].lower()] < month_from:
-                                continue
-                        if int("20"+parsed_date[-1]) == year_from:
-                            if months[parsed_date[1].lower()] == month_from:
-                                if int(parsed_date[0]) < day_from:
-                                    continue
-                    # print(year_to, month_to, day_to)
-                    if parsed_date[-1] != 'ago':  
-                        if int("20"+parsed_date[-1]) > year_to and year_to != 0:
-                            continue
-                        if int("20"+parsed_date[-1]) == year_to:
-                            if months[parsed_date[1].lower()] > month_to and month_to != 0:
-                                continue
-                        if int("20"+parsed_date[-1]) == year_to:
-                            if months[parsed_date[1].lower()] == month_to:
-                                if int(parsed_date[0]) > day_to and day_to != 0:
-                                    continue
                         m_day = int(parsed_date[0])
                         m_month = months[parsed_date[1].lower()]
-                        m_year = int("20"+parsed_date[-1])
+                        raw_year = parsed_date[-1]
+                        m_year = int(raw_year) if len(raw_year) == 4 else int("20" + raw_year)
+                        if not is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
+                            continue
                     
                     response = requests.get(link, headers=headers)
                     # print(link)
                     if response.status_code == 200:
                         opened_article = BeautifulSoup(response.text, "html.parser")
-                        article_body = opened_article.find("div", id="article-body")
+                        article_body = opened_article.find("div", id="article-body") or opened_article.find("article") or opened_article
                         article_paragraphs = article_body.find_all("p")
                         for article_paragraph in article_paragraphs:
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
@@ -347,29 +347,11 @@ def search_pc_mag(website_url=website_urls[1], search_terms=search_terms, articl
                     publish_date = article.find("span", attrs={"data-content-published-date": True}).get_text(strip=True)
                     parsed_date = splitter.split(publish_date)
                     if parsed_date[-1] != 'ago': 
-                        if int(parsed_date[-1]) < year_from:
-                            continue
-                        if int(parsed_date[-1]) == year_from:
-                            if int(parsed_date[0]) < month_from:
-                                continue
-                        if int(parsed_date[-1]) == year_from:
-                            if int(parsed_date[0]) == month_from:
-                                if int(parsed_date[1]) < day_from:
-                                    continue
-                    
-                    if parsed_date[-1] != 'ago': 
-                        if int(parsed_date[-1]) > year_to and year_to != 0:
-                            continue
-                        if int(parsed_date[-1]) == year_to:
-                            if int(parsed_date[0]) > month_to and month_to != 0:
-                                continue
-                        if int(parsed_date[-1]) == year_to:
-                            if int(parsed_date[0]) == month_to:
-                                if int(parsed_date[1]) > day_to and day_to != 0:
-                                    continue
                         m_day = int(parsed_date[1])
-                        m_month = int(parsed_date[0]) 
+                        m_month = int(parsed_date[0])
                         m_year = int(parsed_date[-1])
+                        if not is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
+                            continue
                     # synopsis = article.find("p", class_="line-clamp-2").get_text(strip=True)
                     author = article.find_all("a",  attrs={"data-element": "author-name"})
                     author_names = []
@@ -440,7 +422,7 @@ def search_the_pc_enthusiast(website_url=website_urls[2], search_terms=search_te
                 continue
 
             # separate the individual articles from the container and store in new container
-            articles = results_container.find_all("div", class_="inside-article")
+            articles = results_container.find_all("article") or results_container.find_all("div", class_="inside-article")
             if not articles: 
                 print(f"PC E No results for {search_terms[term]}\n")
                 continue
@@ -452,37 +434,22 @@ def search_the_pc_enthusiast(website_url=website_urls[2], search_terms=search_te
                 m_year = year
                 if i < article_limit:  
                     # get the link tag <a>
-                    author = article.find("span", class_="author-name").get_text(strip=True)
-                    a_tag = article.find("a", rel="bookmark")
+                    author_elem = article.find("span", class_="author-name") or article.find("span", class_="author") or article.find("a", rel="author")
+                    author = author_elem.get_text(strip=True) if author_elem else "Staff"
+                    a_tag = article.find("a", rel="bookmark") or article.find("h2").find("a") if article.find("h2") else article.find("a")
                     link = a_tag.get("href")
                     title = a_tag.get_text(strip=True)
-                    publish_date = article.find("time", class_="published").get_text(strip=True)
-                    parsed_date = splitter.split(publish_date)
+                    time_elem = article.find("time", class_="published") or article.find("time")
+                    publish_date = time_elem.get_text(strip=True) if time_elem else "Jan 1, 2025"
+                    raw_tokens = splitter.split(publish_date)
+                    parsed_date = [p for p in raw_tokens if p.lower().rstrip(',') not in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']]
 
                     if parsed_date[-1] != 'ago': 
-                        if int(parsed_date[-1]) < year_from:
-                            continue
-                        if int(parsed_date[-1]) == year_from:
-                            if months[parsed_date[0].lower()] < month_from:
-                                continue
-                        if int(parsed_date[-1]) == year_from:
-                            if months[parsed_date[0].lower()] == month_from:
-                                if int(parsed_date[1]) < day_from:
-                                    continue
-
-                    if parsed_date[-1] != 'ago': 
-                        if int(parsed_date[-1]) > year_to and year_to != 0:
-                            continue
-                        if int(parsed_date[-1]) == year_to:
-                            if months[parsed_date[0].lower()] > month_to and month_to != 0:
-                                continue
-                        if int(parsed_date[-1]) == year_to:
-                            if months[parsed_date[0].lower()] == month_to:
-                                if int(parsed_date[1]) > day_to and day_to != 0:
-                                    continue
-                        m_day = int(parsed_date[1]) 
+                        m_day = int(parsed_date[1])
                         m_month = months[parsed_date[0].lower()]
                         m_year = int(parsed_date[-1])
+                        if not is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
+                            continue
                     current_article_text = ""
                     response = requests.get(link, headers=headers)
                     if response.status_code == 200:
@@ -557,31 +524,14 @@ def search_hothardware(website_url=website_urls[3], search_terms=search_terms, a
                     link = "https://hothardware.com" + title_link_tag.get("href")
                     title = title_link_tag.get_text(strip=True)
                     publish_date = article.find("div", class_="cli-byline").get_text(strip=True).split('-')[-1].strip()
-                    parsed_date = splitter.split(publish_date)
-                    if parsed_date[-1] != 'ago': 
-                        if int(parsed_date[-1]) < year_from:
+                    raw_tokens = splitter.split(publish_date)
+                    parsed_date = [p for p in raw_tokens if p.lower().rstrip(',') not in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']]
+                    if parsed_date and parsed_date[-1] != 'ago': 
+                        m_month = months[parsed_date[0].lower()]
+                        m_day = int(parsed_date[1])
+                        m_year = int(parsed_date[2])
+                        if not is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
                             continue
-                        if int(parsed_date[-1]) == year_from:
-                            if months[parsed_date[1].lower()] < month_from:
-                                continue
-                        if int(parsed_date[-1]) == year_from:
-                            if months[parsed_date[1].lower()] == month_from:
-                                if int(parsed_date[2]) < day_from:
-                                    continue
-                        
-                    if parsed_date[-1] != 'ago': 
-                        if int(parsed_date[-1]) > year_to and year_to != 0:
-                            continue
-                        if int(parsed_date[-1]) == year_to:
-                            if months[parsed_date[1].lower()] > month_to and month_to != 0:
-                                continue
-                        if int(parsed_date[-1]) == year_to:
-                            if months[parsed_date[1].lower()] == month_to:
-                                if int(parsed_date[2]) > day_to and day_to != 0:
-                                    continue
-                        m_day = int(parsed_date[2])
-                        m_month = months[parsed_date[1].lower()]
-                        m_year = int(parsed_date[-1])
                     current_article_text = ""
                     response = requests.get(link, headers=headers)
                     if response.status_code == 200:
@@ -655,29 +605,11 @@ def search_pc_perspective(website_url=website_urls[4], search_terms=search_terms
                     publish_date = article.find("span", class_="updated").get_text(strip=True)
                     parsed_date = splitter.split(publish_date)
                     if parsed_date[-1] != 'ago': 
-                        if int(parsed_date[-1]) < year_from:
-                            continue
-                        if int(parsed_date[-1]) == year_from:
-                            if months[parsed_date[0].lower()] < month_from:
-                                continue
-                        if int(parsed_date[-1]) == year_from:
-                            if months[parsed_date[0].lower()] == month_from:
-                                if int(parsed_date[1]) < day_from:
-                                    continue
-                    
-                    if parsed_date[-1] != 'ago': 
-                        if int(parsed_date[-1]) > year_to and year_to != 0:
-                            continue
-                        if int(parsed_date[-1]) == year_to:
-                            if months[parsed_date[0].lower()] > month_to and month_to != 0:
-                                continue
-                        if int(parsed_date[-1]) == year_to:
-                            if months[parsed_date[0].lower()] == month_to:
-                                if int(parsed_date[1]) > day_to and day_to != 0:
-                                    continue
                         m_day = int(parsed_date[1])
                         m_month = months[parsed_date[0].lower()]
                         m_year = int(parsed_date[-1])
+                        if not is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
+                            continue
 
                     current_article_text = ""
                     response = requests.get(link, headers=headers)
@@ -755,7 +687,7 @@ def search_gamerant(website_url=website_urls[5], search_terms=search_terms, arti
                 if i < article_limit:
                     # get the link tag <a>
                     author = article.find("a", rel="author").get_text(strip=True)
-                    a_tag = article.find("a", class_=False, id=False)
+                    a_tag = article.find("a", rel=False)
                     link = "https://gamerant.com" + a_tag.get("href")
                     title = a_tag.get_text(strip=True)
                     
@@ -872,30 +804,12 @@ def search_windows_central(website_url=website_urls[6], search_terms=search_term
                     parsed_date = splitter.split(publish_date)
 
                     if parsed_date[-1] != 'ago': 
-                        if int("20" + parsed_date[-1]) < year_from:
-                            continue
-                        if int("20" + parsed_date[-1]) == year_from:
-                            if months[parsed_date[1].lower()] < month_from:
-                                continue
-                        if int("20" + parsed_date[-1]) == year_from:
-                            if months[parsed_date[1].lower()] == year_from:
-                                if int(parsed_date[0]) < day_from:
-                                    continue
-
-                    if parsed_date[-1] != 'ago': 
-                        if int("20" + parsed_date[-1]) > year_to and year_to != 0:
-                            continue
-                        if int("20" + parsed_date[-1]) == year_to:
-                            if months[parsed_date[1].lower()] > month_to and month_to != 0:
-                                continue
-                        if int("20" + parsed_date[-1]) == year_to:
-                            if months[parsed_date[1].lower()] == month_to:
-                                if int(parsed_date[0]) > day_to and day_to != 0:
-                                    continue
-
-                        m_day = int(parsed_date[0]) 
+                        m_day = int(parsed_date[0])
                         m_month = months[parsed_date[1].lower()]
-                        m_year = int("20" + parsed_date[-1])
+                        raw_year = parsed_date[-1]
+                        m_year = int(raw_year) if len(raw_year) == 4 else int("20" + raw_year)
+                        if not is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
+                            continue
 
                     current_article_text = ""   
                     response = requests.get(link, headers=headers)
@@ -939,9 +853,7 @@ def search_tech_radar(website_url=website_urls[7], search_terms=search_terms, ar
     matched_article_metadata = {}
     for term in range(len(search_terms)):
         i = 0
-        params = {"searchTerm": search_terms[term],
-                  "articleType": "all",
-                  "sortBy": "relevance"}
+        params = {"searchTerm": search_terms[term]}
 
         response = requests.get(website_url, params=params, headers=headers)
         #print("Search URL:", response.url)
@@ -975,39 +887,18 @@ def search_tech_radar(website_url=website_urls[7], search_terms=search_terms, ar
                     parsed_date = splitter.split(publish_date)
 
                     if parsed_date[-1] != 'ago': 
-                        if int("20"+parsed_date[-1]) < year_from:
-                            continue
-                        if int("20"+parsed_date[-1]) == year_from:
-                            if months[parsed_date[1].lower()] < month_from:
-                                continue
-                        if int(parsed_date[-1]) == year_from:
-                            if months[parsed_date[1].lower()] == month_from:
-                                if int(parsed_date[0]) < day_from:
-                                    continue
-
-                    if parsed_date[-1] != 'ago': 
-                        if int("20"+parsed_date[-1]) > year_to and year_to != 0:
-                            continue
-                        if int("20"+parsed_date[-1]) == year_to:
-                            if months[parsed_date[1].lower()] > month_to and month_to != 0:
-                                continue
-                        if int(parsed_date[-1]) == year_to:
-                            if months[parsed_date[1].lower()] == month_to:
-                                if int(parsed_date[0]) > day_to and day_to != 0:
-                                    continue
-
                         m_day = int(parsed_date[0])
                         m_month = months[parsed_date[1].lower()]
-                        m_year = int("20"+parsed_date[-1])
+                        raw_year = parsed_date[-1]
+                        m_year = int(raw_year) if len(raw_year) == 4 else int("20" + raw_year)
+                        if not is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
+                            continue
                     current_article_text = ""
                     response = requests.get(link, headers=headers)
                     if response.status_code == 200:
                         opened_article = BeautifulSoup(response.text, "html.parser")
-                        article_body = opened_article.find("div", id="article-body")
-                        if article_body is None: 
-                            print(f"Article is empty at Link: {link}")
-                            break
-                        article_paragraphs = article_body.find_all("p", class_=False, id=False)
+                        article_body = opened_article.find("div", id="article-body") or opened_article.find("article") or opened_article
+                        article_paragraphs = article_body.find_all("p")
                         for article_paragraph in article_paragraphs:
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
                         if len(current_article_text.lower().split()) > word_limit:
@@ -1046,9 +937,7 @@ search_functions = [search_toms_hardware,
                     search_windows_central,
                     search_tech_radar]
 
-def search_all_sites(website_urls=website_urls, search_terms=search_terms, article_limit=1, word_limit=7500, year_from=year, month_from=month, day_from=day , day_to=day, month_to=month, year_to=year, sites_to_search=[0], keywords=[]):
-    # global kws
-    # kws = keywords
+def search_all_sites(website_urls=website_urls, search_terms=search_terms, article_limit=1, word_limit=1000, year_from=year, month_from=month, day_from=day, day_to=day, month_to=month, year_to=year, sites_to_search=[0], keywords=[]):
     i = 0
     return_list = {}
     for website_url in website_urls:
