@@ -34,6 +34,12 @@ jobs:
           cache: 'pip'
 
       - name: Run Backend Tests
+        env:
+          GROQ_API_KEY: "mock_groq_api_key_for_ci"
+          RESEND_APIKEY: "mock_resend_api_key_for_ci"
+          SUPABASE_URL: "https://mock.supabase.co"
+          SUPABASE_SERVICE_KEY: "mock_supabase_key_for_ci"
+          BUILD_ENV: "test"
         run: |
           pip install -r requirements.txt
           pytest
