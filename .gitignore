@@ -20,10 +20,7 @@ backend/scratch/
 
 scratch/
 
-tests/
-
 pyrefly.toml
-pytest.ini
 SYSTEM_SPEC_SHEET.md
 
 public_html/main.js

@@ -1,5 +1,0 @@
-# Pyrefly configuration file
-# Specify the path to the Python interpreter within the virtual environment
-python-interpreter-path = "backend/.venv/bin/python"
-
-preset = "off"
