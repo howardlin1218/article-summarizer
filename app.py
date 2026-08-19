@@ -209,7 +209,15 @@ async def search_site_stream(payload: SearchSiteRequest, request: Request, respo
         # Stage 4: Complete & Render Output
         yield f"data: {json.dumps({'stage': 4, 'step': 'complete', 'message': 'Summarization complete!', 'progress': 100, 'status': 'success', 'html': return_str})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 @app.get("/api/recent-saves")
 async def get_recent_articles(request: Request, response: Response):
