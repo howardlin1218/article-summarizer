@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["DOM", "DOM.Iterable", "ES2017"],  // Added DOM.Iterable here
+    "module": "ES6",
+    "strict": true,
+    "esModuleInterop": true
+  }
+}

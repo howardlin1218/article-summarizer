@@ -1,0 +1,76 @@
+name: Build & Deploy to Ubuntu VPS
+
+on:
+  push:
+    branches:
+      - prod-branch
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the code
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 2: Build Frontend with Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Build TypeScript Frontend
+        run: |
+          npm ci
+          npm run build
+
+      # Step 3: Run Python Tests (Safety Check)
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Run Backend Tests
+        run: |
+          pip install -r requirements.txt
+          pytest
+
+      # Step 4: Update Repository & Python Dependencies on Server
+      - name: Pull Code & Update Python Backend on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            set -e
+            cd /var/www/article-summarizer
+            git fetch origin prod-branch
+            git reset --hard origin/prod-branch
+            source .venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+      # Step 5: Transfer Compiled main.js to Server
+      - name: Copy Built main.js to Server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "public_html/main.js"
+          target: "/var/www/article-summarizer"
+
+      # Step 6: Restart FastAPI Service
+      - name: Restart Backend Service on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            sudo systemctl restart fastapi-backend
+            sudo systemctl status fastapi-backend --no-pager

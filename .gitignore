@@ -1,5 +1,5 @@
 # Virtual Environments
-backend/.venv/
+.venv/
 # Environment Variables & Secrets
 .env
 *.env
@@ -17,3 +17,13 @@ backend/.pytest_cache/
 .agents/
 # Scratch directory (optional)
 backend/scratch/
+
+scratch/
+
+tests/
+
+pyrefly.toml
+pytest.ini
+SYSTEM_SPEC_SHEET.md
+
+public_html/main.js
