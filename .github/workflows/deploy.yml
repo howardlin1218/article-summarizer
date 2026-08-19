@@ -68,7 +68,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           source: "public_html/main.js"
-          target: "/var/www/article-summarizer"
+          target: "/var/www/summarizer.howard1218.site"
 
       # Step 6: Restart FastAPI Service
       - name: Restart Backend Service on VPS
