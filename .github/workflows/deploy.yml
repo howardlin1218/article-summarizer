@@ -53,7 +53,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             set -e
-            cd /var/www/article-summarizer
+            cd /var/www/summarizer.howard1218.site
             git fetch origin prod-branch
             git reset --hard origin/prod-branch
             source .venv/bin/activate
