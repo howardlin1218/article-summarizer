@@ -127,10 +127,17 @@ def test_search_site_stream_endpoint(client):
         }
     }
     
+    def mock_scraper(*args, **kwargs):
+        return {
+            "https://www.tomshardware.com/news/test": [
+                "Test content", ["MSI"], "Test Title", "Author", "2025-01-01", "2025-01-01", None, "Desc"
+            ]
+        }
+
     async def mock_async_construct(*args, **kwargs):
         return "<div class='article-container'>Mocked Rendered Stream Articles</div>"
 
-    with patch("app.search_all_sites", return_value=mock_results), \
+    with patch("app.search_functions", [mock_scraper] * 8), \
          patch("app.construct_message_async", side_effect=mock_async_construct):
         
         payload = {
@@ -188,9 +195,9 @@ async def test_rate_limit_retry_and_fallback():
         model = kwargs.get("model")
         models_called.append(model)
         
-        # Simulate 70b failing with 429 RateLimitError, then 8b succeeding
-        if model == "llama-3.3-70b-versatile":
-            raise Exception("Rate limit reached for model `llama-3.3-70b-versatile`: TPM limit 12000 exceeded")
+        # Simulate compound-mini failing with 429 RateLimitError, then compound succeeding
+        if model == "groq/compound-mini":
+            raise Exception("Rate limit reached for model `groq/compound-mini`: TPM limit exceeded")
         else:
             class MockChoice:
                 class MockMessage:
@@ -205,5 +212,5 @@ async def test_rate_limit_retry_and_fallback():
         
         result = await call_groq_with_retry_and_fallback("Test prompt")
         assert "Success from fallback model" in result
-        assert "llama-3.3-70b-versatile" in models_called
-        assert "llama-3.1-8b-instant" in models_called
+        assert "groq/compound-mini" in models_called
+        assert "groq/compound" in models_called

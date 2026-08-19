@@ -17,7 +17,7 @@ from schemas import (
 from methods import (
     construct_message_async, send_email, is_valid_email, is_safe_and_relevant_prompt
 )
-from search import search_all_sites
+from search import search_all_sites, search_functions, website_urls as search_website_urls
 from database import (
     insert_to_supabase, get_recent_10_articles, search_for_articles, get_all_saved
 )
@@ -151,63 +151,89 @@ async def search_site(payload: SearchSiteRequest, request: Request, response: Re
 
 @app.post("/api/search-site-stream")
 async def search_site_stream(payload: SearchSiteRequest, request: Request, response: Response):
-    if payload.customPrompt and not is_safe_and_relevant_prompt(payload.customPrompt):
-        raise HTTPException(
-            status_code=400,
-            detail="Inappropriate or irrelevant custom prompt. Your prompt must be strictly related to summarizing, analyzing, or processing text from the articles."
-        )
+    """
+    Search articles across selected websites and stream real-time progress via SSE.
+    """
+    if payload.customPrompt:
+        if not is_safe_and_relevant_prompt(payload.customPrompt):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Custom prompt is off-topic or contains disallowed instructions."
+            )
 
     user_id = get_or_create_session_id(request, response)
 
     async def event_generator():
-        # Stage 1: Searching Target Websites
-        yield f"data: {json.dumps({'stage': 1, 'step': 'searching', 'message': 'Searching target publication websites...', 'progress': 25})}\n\n"
-        await asyncio.sleep(0.05)
+        try:
+            keywords_list = [kw.strip() for kw in payload.keywords.split(",") if kw.strip()] if payload.keywords else []
+            search_terms_list = [kw.strip() for kw in payload.searchTerms.split("|") if kw.strip()] if payload.searchTerms else []
 
-        keywords_list = [kw.strip() for kw in payload.keywords.split(",") if kw.strip()] if payload.keywords else []
-        search_terms_list = [kw.strip() for kw in payload.searchTerms.split("|") if kw.strip()] if payload.searchTerms else []
+            now = datetime.now()
+            year_to = payload.year_to if payload.year_to != 0 else now.year
+            month_to = payload.month_to if payload.month_to != 0 else now.month
+            day_to = payload.day_to if payload.day_to != 0 else now.day
 
-        now = datetime.now()
-        year_to = payload.year_to if payload.year_to != 0 else now.year
-        month_to = payload.month_to if payload.month_to != 0 else now.month
-        day_to = payload.day_to if payload.day_to != 0 else now.day
+            site_names = [
+                "Tom's Hardware", "PC Mag", "The PC Enthusiast", "Hot Hardware",
+                "PC Perspective", "GameRant", "Windows Central", "Tech Radar"
+            ]
 
-        results_list = await asyncio.to_thread(
-            search_all_sites,
-            search_terms=search_terms_list,
-            article_limit=payload.limit,
-            year_from=payload.year_from,
-            month_from=payload.month_from,
-            day_from=payload.day_from,
-            year_to=year_to,
-            month_to=month_to,
-            day_to=day_to,
-            sites_to_search=payload.websites,
-            keywords=keywords_list
-        )
+            selected_sites = payload.websites or [0]
+            total_sites = len(selected_sites)
+            results_list = {}
 
-        # Stage 2: Scraping & Extracting Article Content
-        total_articles = sum(len(res) for res in results_list.values())
-        msg = f"Extracted {total_articles} matching article(s). Parsing DOM & metadata..." if total_articles > 0 else "No matching articles found."
-        yield f"data: {json.dumps({'stage': 2, 'step': 'scraping', 'message': msg, 'progress': 50, 'article_count': total_articles})}\n\n"
-        await asyncio.sleep(0.05)
+            # Stage 1: Searching & Scraping Target Websites (with live per-publication progress)
+            for idx, site_idx in enumerate(selected_sites):
+                if 0 <= site_idx < len(search_functions):
+                    name = site_names[site_idx] if site_idx < len(site_names) else f"Site #{site_idx+1}"
+                    progress_pct = int(10 + (idx / total_sites) * 50)
+                    yield f"data: {json.dumps({'stage': 1, 'step': 'searching', 'message': f'Searching & scraping {name} ({idx+1}/{total_sites})...', 'progress': progress_pct})}\n\n"
+                    await asyncio.sleep(0.02)
 
-        # Stage 3: AI Summarization & Sentiment Analysis
-        yield f"data: {json.dumps({'stage': 3, 'step': 'summarizing', 'message': f'Running parallel Groq LLM summarization & sentiment analysis for {total_articles} article(s)...', 'progress': 75})}\n\n"
+                    target_url = search_website_urls[site_idx]
+                    site_res = await asyncio.to_thread(
+                        search_functions[site_idx],
+                        target_url,
+                        search_terms_list,
+                        payload.limit,
+                        1000,
+                        payload.year_from,
+                        payload.month_from,
+                        payload.day_from,
+                        year_to,
+                        month_to,
+                        day_to,
+                        keywords=keywords_list
+                    )
+                    results_list[target_url] = site_res
 
-        user_json_dict = session_json_dicts.setdefault(user_id, {})
-        user_email_dict = session_email_dicts.setdefault(user_id, {})
+            # Stage 2: Scraping & Extracting Article Content
+            total_articles = sum(len(res) for res in results_list.values())
+            msg = f"Extracted {total_articles} matching article(s). Parsing DOM & metadata..." if total_articles > 0 else "No matching articles found."
+            yield f"data: {json.dumps({'stage': 2, 'step': 'scraping', 'message': msg, 'progress': 65, 'article_count': total_articles})}\n\n"
+            await asyncio.sleep(0.02)
 
-        return_str = await construct_message_async(
-            results_list=results_list,
-            keywords=keywords_list,
-            custom_prompt=payload.customPrompt,
-            json_dict=user_json_dict,
-            email_dict=user_email_dict
-        )
+            # Stage 3: AI Summarization & Sentiment Analysis
+            yield f"data: {json.dumps({'stage': 3, 'step': 'summarizing', 'message': f'Running parallel Groq LLM summarization & sentiment analysis for {total_articles} article(s)...', 'progress': 80})}\n\n"
+            await asyncio.sleep(0.02)
 
-        # Stage 4: Complete & Render Output
-        yield f"data: {json.dumps({'stage': 4, 'step': 'complete', 'message': 'Summarization complete!', 'progress': 100, 'status': 'success', 'html': return_str})}\n\n"
+            user_json_dict = session_json_dicts.setdefault(user_id, {})
+            user_email_dict = session_email_dicts.setdefault(user_id, {})
+
+            return_str = await construct_message_async(
+                results_list=results_list,
+                keywords=keywords_list,
+                custom_prompt=payload.customPrompt,
+                json_dict=user_json_dict,
+                email_dict=user_email_dict
+            )
+
+            # Stage 4: Complete & Render Output
+            yield f"data: {json.dumps({'stage': 4, 'step': 'complete', 'message': 'Summarization complete!', 'progress': 100, 'status': 'success', 'html': return_str})}\n\n"
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield f"data: {json.dumps({'stage': 4, 'step': 'error', 'message': f'Server Error: {str(e)}', 'status': 'error', 'progress': 100, 'html': ''})}\n\n"
 
     return StreamingResponse(
         event_generator(),

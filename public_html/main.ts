@@ -39,9 +39,9 @@ interface ApiResponse {
 }
 
 // API Configuration
-const API_BASE_URL = 'https://www.summarizer.howard1218.site/api';
+// const API_BASE_URL = 'https://www.summarizer.howard1218.site/api';
 
-// const API_BASE_URL = 'http://127.0.0.1:5000/api'
+const API_BASE_URL = 'http://127.0.0.1:5000/api'
 async function makeApiRequest_recent(endpoint: string): Promise<ApiResponse> {
     const url = `${API_BASE_URL}${endpoint}`;
     console.log(url)
@@ -151,6 +151,10 @@ async function makeApiRequest_stream(endpoint: string, data: SearchValues, onPro
                                 finalResponse.html = eventData.html;
                                 finalResponse.status = eventData.status || 'success';
                             }
+                            if (eventData.status === 'error') {
+                                finalResponse.status = 'error';
+                                finalResponse.message = eventData.message || 'Server error';
+                            }
                         } catch (e) {
                             console.error("Failed parsing SSE JSON chunk:", line);
                         }
@@ -197,8 +201,8 @@ function updateSearchProgress(stage: number, progressPct: number, message: strin
     if (msg) msg.textContent = message;
     
     if (title) {
-        if (stage === 1) title.textContent = "Searching Target Publications...";
-        else if (stage === 2) title.textContent = "Scraping & Extracting Articles...";
+        if (stage === 1) title.textContent = "Searching & Scraping Publications...";
+        else if (stage === 2) title.textContent = "Validating Article Content...";
         else if (stage === 3) title.textContent = "AI Summarization & Sentiment Analysis...";
         else if (stage === 4) title.textContent = "Summarization Complete!";
     }
@@ -1224,7 +1228,7 @@ document.addEventListener('DOMContentLoaded', function(): void {
                     updateSearchProgress(eventData.stage, eventData.progress, eventData.message);
                 });
 
-                if (response.status === 'success' && response.html) {
+                if (response.status === 'success') {
                     displayResults(response);
                 } else {
                     alert(`Error: ${response.message}`);

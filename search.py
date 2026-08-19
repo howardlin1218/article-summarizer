@@ -273,7 +273,7 @@ def search_toms_hardware(website_url=website_urls[0], search_terms=search_terms,
                         for article_paragraph in article_paragraphs:
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
                         # print(len(current_article_text.lower().split()))
-                        if len(current_article_text.lower().split()) > word_limit:
+                        if len(current_article_text) > (word_limit * 6) or len(current_article_text.split()) > word_limit:
                             continue
                         matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
@@ -370,11 +370,11 @@ def search_pc_mag(website_url=website_urls[1], search_terms=search_terms, articl
                         article_body = opened_article.find("article")
                         if article_body is None: 
                             print(f"Article is empty at Link: {link}")
-                            break
+                            continue
                         article_paragraphs = article_body.find_all("p")
                         for article_paragraph in article_paragraphs:
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
-                        if len(current_article_text.lower().split()) > word_limit:
+                        if len(current_article_text) > (word_limit * 6) or len(current_article_text.split()) > word_limit:
                             continue
                         matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
@@ -457,11 +457,11 @@ def search_the_pc_enthusiast(website_url=website_urls[2], search_terms=search_te
                         article_body = opened_article.find("div", class_="entry-content")
                         if article_body is None: 
                             print(f"Article is empty at Link: {link}")
-                            break
+                            continue
                         article_paragraphs = article_body.find_all("p", class_=False, id=False)
                         for article_paragraph in article_paragraphs:
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
-                        if len(current_article_text.lower().split()) > word_limit:
+                        if len(current_article_text) > (word_limit * 6) or len(current_article_text.split()) > word_limit:
                             continue
                         matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
@@ -539,8 +539,8 @@ def search_hothardware(website_url=website_urls[3], search_terms=search_terms, a
                         current_article_text = opened_article.find("div", class_="cn-body e-content").get_text(strip=True)
                         if current_article_text is None: 
                             print(f"Article is empty at Link: {link}")
-                            break
-                        if len(current_article_text.lower().split()) > word_limit:
+                            continue
+                        if len(current_article_text) > (word_limit * 6) or len(current_article_text.split()) > word_limit:
                             continue
                         matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
@@ -618,11 +618,11 @@ def search_pc_perspective(website_url=website_urls[4], search_terms=search_terms
                         article_body = opened_article.find("div", class_="et-l et-l--post")
                         if article_body is None: 
                             print(f"Article is empty at Link: {link}")
-                            break
+                            continue
                         article_paragraphs = article_body.find_all("p", class_=False, id=False)
                         for article_paragraph in article_paragraphs:
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
-                        if len(current_article_text.lower().split()) > word_limit:
+                        if len(current_article_text) > (word_limit * 6) or len(current_article_text.split()) > word_limit:
                             continue
                         matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
@@ -685,11 +685,20 @@ def search_gamerant(website_url=website_urls[5], search_terms=search_terms, arti
                 # print(f"i: {i}, article limit: {article_limit}, articles: {len(articles)}, i < article_limit: {i < article_limit}")
                 
                 if i < article_limit:
-                    # get the link tag <a>
-                    author = article.find("a", rel="author").get_text(strip=True)
-                    a_tag = article.find("a", rel=False)
-                    link = "https://gamerant.com" + a_tag.get("href")
-                    title = a_tag.get_text(strip=True)
+                    # get the title & link
+                    title_tag = article.find("h5") or article.find("h3") or article.find("h2") or article.find("h4")
+                    title_a = title_tag.find("a") if title_tag else (article.find("a", class_="dc-title-link") or article.find("a", class_="dc-img-link"))
+                    if title_a:
+                        title = title_a.get_text(strip=True) or title_a.get("title", "").strip()
+                        href = title_a.get("href", "")
+                        link = urljoin("https://gamerant.com", href)
+                    else:
+                        title = title_tag.get_text(strip=True) if title_tag else "GameRant Article"
+                        a_tag = article.find("a", href=True)
+                        link = urljoin("https://gamerant.com", a_tag.get("href", "")) if a_tag else ""
+                    
+                    author_tag = article.find("a", class_="article-author") or article.find("a", rel="author") or article.find("span", class_="author")
+                    author = author_tag.get_text(strip=True) if author_tag else "GameRant Staff"
                     
                     # publish_date = article.find("span", class_="display-card-date").get_text(strip=True)
                     # parsed_date = splitter.split(publish_date)
@@ -734,11 +743,11 @@ def search_gamerant(website_url=website_urls[5], search_terms=search_terms, arti
                         article_body = opened_article.find("div", class_="content-block-regular")
                         if article_body is None: 
                             print(f"Article is empty at Link: {link}")
-                            break
+                            continue
                         article_paragraphs = article_body.find_all("p", class_=False, id=False)
                         for article_paragraph in article_paragraphs:
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
-                        if len(current_article_text.lower().split()) > word_limit:
+                        if len(current_article_text) > (word_limit * 6) or len(current_article_text.split()) > word_limit:
                             continue
                         matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
@@ -818,11 +827,11 @@ def search_windows_central(website_url=website_urls[6], search_terms=search_term
                         article_body = opened_article.find("div", id="article-body")
                         if article_body is None: 
                             print(f"Article is empty at Link: {link}")
-                            break
+                            continue
                         article_paragraphs = article_body.find_all("p", class_=False, id=False)
                         for article_paragraph in article_paragraphs:
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
-                        if len(current_article_text.lower().split()) > word_limit:
+                        if len(current_article_text) > (word_limit * 6) or len(current_article_text.split()) > word_limit:
                             continue
                         matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:
@@ -901,7 +910,7 @@ def search_tech_radar(website_url=website_urls[7], search_terms=search_terms, ar
                         article_paragraphs = article_body.find_all("p")
                         for article_paragraph in article_paragraphs:
                             current_article_text += (article_paragraph.get_text(strip=True) + ' ')
-                        if len(current_article_text.lower().split()) > word_limit:
+                        if len(current_article_text) > (word_limit * 6) or len(current_article_text.split()) > word_limit:
                             continue
                         matched = match_keywords(current_article_text, keywords)
                         if len(matched) != 0:

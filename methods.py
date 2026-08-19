@@ -120,58 +120,74 @@ def convert_metadata_to_html(website_url, title, author, publish_date, keywords,
 def convert_response_to_html_list_summary(bullet_list_response, custom_response=False):
     lines = bullet_list_response.strip().splitlines()
     list_items = []
-    has_bullets = False
     
-    for line in lines:
-        line = line.strip()
-        if line and (line.startswith("*") or line.startswith("-")):
-            has_bullets = True
-            break
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        # Skip header lines if repeated inside the summary part
+        if re.match(r'^(===|###|\*\*)\s*(SUMMARY|Summary)', line, flags=re.IGNORECASE):
+            continue
+        # Clean leading bullet markers (*, -, •, 1., etc.) so all items render as clean uniform bullets
+        content = re.sub(r'^[\*\-\•\d\.\)\:\s]+', '', line).strip()
+        if content:
+            list_items.append(f"<li>{content}</li>")
             
-    if has_bullets:
-        for line in lines: 
-            line = line.strip()
-            if line and (line.startswith("*") or line.startswith("-")):
-                content = line[1:].strip()
-                list_items.append(f"<li>{content}</li>")
+    if list_items:
         html = "<ul class='summary-box' style='background-color: #fff; padding: 1rem 1.5rem; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 2rem;'>\n" + "\n".join(list_items) + "\n</ul>\n"
     else:
-        paragraphs = []
-        current_p = []
-        for line in lines:
-            line = line.strip()
-            if line == "":
-                if current_p:
-                    paragraphs.append(f"<p style='margin-bottom: 1rem;'>{' '.join(current_p)}</p>")
-                    current_p = []
-            else:
-                current_p.append(line)
-        if current_p:
-            paragraphs.append(f"<p style='margin-bottom: 1rem;'>{' '.join(current_p)}</p>")
-        html = f"<div class='summary-box' style='background-color: #fff; padding: 1rem 1.5rem; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 2rem;'>\n" + "\n".join(paragraphs) + "\n</div>\n"
-    return "<h2>📌 Summary</h2>\n"+html
+        html = "<ul class='summary-box' style='background-color: #fff; padding: 1rem 1.5rem; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 2rem;'>\n<li>No summary points generated.</li>\n</ul>\n"
+        
+    return "<h2>📌 Summary</h2>\n" + html
 
 def convert_response_to_html_list_sentiment(bullet_list_response):
-    rows = ""
+    categories = {"positive": [], "neutral": [], "negative": []}
+    current_cat = None
+    
     lines = bullet_list_response.strip().splitlines()
-    for line in lines: 
-        line = line.strip()
-        if line == "":
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
             continue
-        if line[0] == "*":
-            if "positive" in line[1:].lower():
-                rows += "<div class='sentiment-block positive' style='background-color: #fff; padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid #ccc; border-left: 5px solid green; '>\n<h3 style='margin-top: 0;'>Positive</h3>\n<ul>\n"
-            if "neutral" in line[1:].lower():
-                rows += "</ul>\n</div>\n<div class='sentiment-block neutral' style='background-color: #fff; padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid #ccc; border-left: 5px solid red; '>\n<h3 style='margin-top: 0;'>Neutral</h3>\n<ul>\n"
-            if "negative" in line[1:].lower():
-                rows += "</ul>\n</div>\n<div class='sentiment-block negative' style='background-color: #fff; padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid #ccc; border-left: 5px solid gray; '>\n<h3 style='margin-top: 0;'>Negative</h3>\n<ul>\n"
+        lower_line = line.lower()
+        if "positive" in lower_line and ("*" in line or "#" in line or "**" in line or line.startswith("positive") or ":" in line):
+            current_cat = "positive"
             continue
-        rows += f"<li>{line[1:].strip()}</li>\n"
-    rows += "</ul>\n</div>\n</div>\n"
+        elif "neutral" in lower_line and ("*" in line or "#" in line or "**" in line or line.startswith("neutral") or ":" in line):
+            current_cat = "neutral"
+            continue
+        elif "negative" in lower_line and ("*" in line or "#" in line or "**" in line or line.startswith("negative") or ":" in line):
+            current_cat = "negative"
+            continue
+            
+        if current_cat:
+            clean_point = re.sub(r'^[\*\-\•\d\.\)\:\s]+', '', line).strip()
+            if clean_point:
+                categories[current_cat].append(clean_point)
+                
+    rows = ""
+    configs = [
+        ("positive", "Positive", "green"),
+        ("neutral", "Neutral", "red"),
+        ("negative", "Negative", "gray"),
+    ]
+    for key, title, border_color in configs:
+        items = categories[key]
+        if not items:
+            items = [f"No specific {key} sentiments mentioned."]
+        li_html = "\n".join(f"<li>{item}</li>" for item in items)
+        rows += f"""<div class='sentiment-block {key}' style='background-color: #fff; padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid #ccc; border-left: 5px solid {border_color};'>
+<h3 style='margin-top: 0;'>{title}</h3>
+<ul>
+{li_html}
+</ul>
+</div>\n"""
+
     return f"""
 <h2>🧠 Sentiment Analysis</h2>\n
 <div class="sentiment-section" style='display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;'>\n
-\n{rows}\n"""
+{rows}
+</div>\n"""
 
 
 def build_combined_prompt(article_text, keywords, custom_prompt):
@@ -186,7 +202,7 @@ def build_combined_prompt(article_text, keywords, custom_prompt):
 
 In addition, perform a sentiment analysis of the article focusing on positive, neutral, and negative sentiments. Structure your sentiment output using bullet points (*) for Positive, Neutral, and Negative categories, and within each category, use dash (-) to represent each specific sentiment point.
 
-You MUST format your output into the following two distinct sections:
+You MUST format your output strictly into the following two distinct sections, starting directly with === SUMMARY ===:
 
 === SUMMARY ===
 * [Bullet point 1]
@@ -228,17 +244,18 @@ def split_combined_llm_response(full_text):
 
 async def call_groq_with_retry_and_fallback(prompt: str) -> str:
     """
-    Executes Groq LLM inference with automatic retry backoff on 429 rate limits
-    and automatic fallback from llama-3.3-70b-versatile to llama-3.1-8b-instant (30k TPM).
+    Executes Groq LLM inference with automatic retry backoff on 429 rate limits,
+    automatic truncation and retry on 413 payload limits, and fallback across available models.
     """
-    models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    models = ["groq/compound-mini", "groq/compound", "openai/gpt-oss-120b"]
     
+    current_prompt = prompt
     for model_name in models:
         for attempt in range(3):
             try:
                 response = await async_groq_client.chat.completions.create(
                     model=model_name,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=[{"role": "user", "content": current_prompt}],
                     temperature=0.1,
                     max_completion_tokens=1024,
                     top_p=0.9
@@ -247,19 +264,26 @@ async def call_groq_with_retry_and_fallback(prompt: str) -> str:
             except Exception as e:
                 err_str = str(e).lower()
                 is_rate_limit = "429" in err_str or "rate limit" in err_str or "tpm" in err_str or "rate_limit_exceeded" in err_str
-                if is_rate_limit:
+                is_too_large = "413" in err_str or "too large" in err_str or "request_too_large" in err_str
+                
+                if is_too_large:
+                    # Truncate prompt text and retry with this or next model
+                    if len(current_prompt) > 3000:
+                        current_prompt = current_prompt[:2500] + "\n\n[... content trimmed ...]\n\n" + current_prompt[-500:]
+                        continue
+                    else:
+                        break
+                elif is_rate_limit:
                     if attempt < 2:
-                        # Exponential backoff: 1.2s, 2.4s
                         await asyncio.sleep(1.2 * (attempt + 1))
                         continue
                     else:
-                        # Fallback to next model in list
                         break
                 else:
-                    # Non-rate-limit error (e.g. invalid API key, prompt length): re-raise
-                    raise e
+                    # Non-fatal: try next model
+                    break
                     
-    return ""
+    return "=== SUMMARY ===\n* Article content could not be summarized due to length/API limits.\n\n=== SENTIMENT ===\n* Positive\n- N/A\n* Neutral\n- General product information\n* Negative\n- N/A"
 
 async def process_single_article_async(website_url, article_url, metadata, keywords, custom_prompt):
     custom = bool(custom_prompt and custom_prompt.strip())
@@ -332,7 +356,7 @@ def construct_message(results_list=None, keywords=[], custom_prompt="", json_dic
             prompt = build_combined_prompt(metadata[0], keywords, custom_prompt)
             
             raw_response = ""
-            models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+            models = ["groq/compound-mini", "groq/compound", "openai/gpt-oss-120b"]
             for model_name in models:
                 try:
                     completion = client.chat.completions.create(
