@@ -1,37 +1,62 @@
-name: CI & Test Suite
+name: Build & Deploy to Ubuntu VPS
 
 on:
-  pull_request:
+  push:
     branches:
       - prod-branch
-    types: [opened, synchronize, reopened]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
-  run-test-suite:
-    name: Run Test Suite
+  deploy:
+    name: Deploy to Production VPS
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
-          cache: 'pip'
+          node-version: 20
+          cache: 'npm'
 
-      - name: Run Backend Tests
-        env:
-          GROQ_API_KEY: "mock_groq_api_key_for_ci"
-          RESEND_APIKEY: "mock_resend_api_key_for_ci"
-          SUPABASE_URL: "https://mock.supabase.co"
-          SUPABASE_SERVICE_KEY: "mock_supabase_key_for_ci"
-          BUILD_ENV: "test"
+      - name: Build TypeScript Frontend
         run: |
-          pip install -r requirements.txt
-          pytest
+          npm ci
+          npm run build
+
+      - name: Update VPS Backend, Scrub Files & Reload PM2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            set -e
+            cd /var/www/summarizer.howard1218.site
+
+            # 1. Update repository to match prod-branch
+            git fetch origin prod-branch
+            git reset --hard origin/prod-branch
+
+            # 2. Update Python dependencies in virtual environment
+            source .venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            # 3. Remove .ts files and test directories from the server
+            find . -type f -name "*.ts" -delete
+            rm -rf tests/ test/ __tests__/
+            rm -rf .agents/
+
+            # 4. Restart or reload PM2 process
+            pm2 reload all || pm2 restart all
+
+      - name: Copy Built main.js to Server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "public_html/main.js"
+          target: "/var/www/summarizer.howard1218.site"
