@@ -68,7 +68,6 @@ const API_BASE_URL = isLocal
       
 async function makeApiRequest_recent(endpoint: string): Promise<ApiResponse> {
     const url = `${API_BASE_URL}${endpoint}`;
-    console.log(url)
     try {
         const response = await fetch(url, {
             method: 'GET',
