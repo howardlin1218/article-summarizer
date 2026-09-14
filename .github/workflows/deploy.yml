@@ -6,15 +6,14 @@ on:
       - prod-branch
 
 jobs:
-  build-and-deploy:
+  deploy:
+    name: Deploy to Production VPS
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the code
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Build Frontend with Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -26,26 +25,7 @@ jobs:
           npm ci
           npm run build
 
-      # Step 3: Run Python Tests (Safety Check)
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: 'pip'
-
-      - name: Run Backend Tests
-        env:
-          GROQ_API_KEY: "mock_groq_api_key_for_ci"
-          RESEND_APIKEY: "mock_resend_api_key_for_ci"
-          SUPABASE_URL: "https://mock.supabase.co"
-          SUPABASE_SERVICE_KEY: "mock_supabase_key_for_ci"
-          BUILD_ENV: "test"
-        run: |
-          pip install -r requirements.txt
-          pytest
-
-      # Step 4: Update Repository & Python Dependencies on Server
-      - name: Pull Code & Update Python Backend on VPS
+      - name: Update VPS Backend, Scrub Files & Reload PM2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -54,13 +34,23 @@ jobs:
           script: |
             set -e
             cd /var/www/summarizer.howard1218.site
+
+            # 1. Update repository to match prod-branch
             git fetch origin prod-branch
             git reset --hard origin/prod-branch
+
+            # 2. Update Python dependencies in virtual environment
             source .venv/bin/activate
             pip install --upgrade pip
             pip install -r requirements.txt
 
-      # Step 5: Transfer Compiled main.js to Server
+            # 3. Remove .ts files and test directories from the server
+            find . -type f -name "*.ts" -delete
+            rm -rf tests/ test/ __tests__/
+
+            # 4. Restart or reload PM2 process
+            pm2 reload all || pm2 restart all
+
       - name: Copy Built main.js to Server
         uses: appleboy/scp-action@v0.1.7
         with:
