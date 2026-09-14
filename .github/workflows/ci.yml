@@ -1,0 +1,37 @@
+name: CI & Test Suite
+
+on:
+  pull_request:
+    branches:
+      - prod-branch
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-test-suite:
+    name: Run Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Run Backend Tests
+        env:
+          GROQ_API_KEY: "mock_groq_api_key_for_ci"
+          RESEND_APIKEY: "mock_resend_api_key_for_ci"
+          SUPABASE_URL: "https://mock.supabase.co"
+          SUPABASE_SERVICE_KEY: "mock_supabase_key_for_ci"
+          BUILD_ENV: "test"
+        run: |
+          pip install -r requirements.txt
+          pytest

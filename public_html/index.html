@@ -3,764 +3,604 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Article Summarizer</title>
-    <link rel="icon" type="image/png" href="favicon.png">
-    <link rel="stylesheet" href="styles.css" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:;"
+    />
+    <title>Article Summarizer | AI Tech News Intelligence & Sentiment Analysis</title>
+    <meta
+      name="description"
+      content="Streamlined AI-driven intelligence platform for technology news. Scrape premier hardware and tech publications, extract instant 7-point summaries, 3-category sentiment analysis, and save or export digests effortlessly."
+    />
+    <link rel="icon" type="image/png" href="./app/favicon.png" />
+    <link rel="stylesheet" href="landing.css" />
   </head>
-  <body>
-    <header>
-      <h1>Article Summarizer</h1>
-      <p>
-        Summarize articles, save summarizations, and access summary database
-      </p>
-    </header>
+  <body class="landing-body">
+    <!-- Background Glow Elements -->
+    <div class="glow-sphere glow-1" aria-hidden="true"></div>
+    <div class="glow-sphere glow-2" aria-hidden="true"></div>
 
-    <div class="container">
-      <div class="card">
-        <h2>Search a site</h2>
-        <form id="quickActionsForm">
-          <div class="form-group">
-            <label>Choose Websites:</label>
-            <div class="custom-dropdown">
-              <div class="dropdown-button" id="websiteDropdownButton">
-                <span id="websiteDropdownText">Select websites...</span>
-                <span class="dropdown-arrow">▼</span>
-              </div>
-              <div class="dropdown-content" id="websiteDropdownContent">
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="websites"
-                    value="0"
-                    id="website1"
-                  />
-                  <label for="website1">Tom's Hardware</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="websites"
-                    value="1"
-                    id="website2"
-                  />
-                  <label for="website2">PC Mag</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="websites"
-                    value="2"
-                    id="website3"
-                  />
-                  <label for="website3">The PC Enthusiast</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="websites"
-                    value="3"
-                    id="website4"
-                  />
-                  <label for="website4">Hot Hardware</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="websites"
-                    value="4"
-                    id="website5"
-                  />
-                  <label for="website5">PC Perspective</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="websites"
-                    value="5"
-                    id="website6"
-                  />
-                  <label for="website6">GameRant</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="websites"
-                    value="6"
-                    id="website7"
-                  />
-                  <label for="website7">Windows Central</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="websites"
-                    value="7"
-                    id="website8"
-                  />
-                  <label for="website8">Tech Radar</label>
-                </div>
-                <div class="dropdown-option" style="border-top: 1px solid #ddd">
-                  <input type="checkbox" id="selectAll" value="8" />
-                  <label for="selectAll"><strong>Select All</strong></label>
-                </div>
-              </div>
-            </div>
-          </div>
+    <!-- Navigation Header -->
+    <nav class="landing-nav" id="landingNav">
+      <div class="nav-container">
+        <a href="#" class="nav-brand" aria-label="Article Summarizer Home">Article Summarizer</a>
 
-          <div class="form-group">
-            <div style="display: flex; gap: 10px; align-items: flex-end">
-              <div style="flex: 2">
-                <label for="search">Search terms</label>
-                <input
-                  type="text"
-                  id="search"
-                  name="search"
-                  placeholder="Enter search terms (comma separated)"
-                  style="width: 100%"
-                />
-              </div>
-              <div style="flex: 1">
-                <label for="amount" style="margin-bottom: 5px; font-size: 14px"
-                  >Limit</label
-                >
-                <div class="number-input-container" style="width: 100%">
-                  <input
-                    type="number"
-                    id="amount"
-                    name="amount"
-                    min="1"
-                    max="100"
-                    value="1"
-                    style="width: 100%"
-                  />
-                  <div class="number-input-arrows">
-                    <div class="number-input-arrow up">▲</div>
-                    <div class="number-input-arrow down">▼</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        <!-- Mobile Menu Toggle Button -->
+        <button class="nav-mobile-toggle" id="navToggleBtn" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="navLinks">
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+        </button>
 
-          <div class="form-group">
-            <label>From:</label>
-            <div style="display: flex; gap: 10px">
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="site-day-from-btn">
-                  <span id="site-day-from-text">Day</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="site-day-from-content">
-                  <div class="dropdown-option" data-value="">Day</div>
-                  <div class="dropdown-option" data-value="1">1</div>
-                  <div class="dropdown-option" data-value="2">2</div>
-                  <div class="dropdown-option" data-value="3">3</div>
-                  <div class="dropdown-option" data-value="4">4</div>
-                  <div class="dropdown-option" data-value="5">5</div>
-                  <div class="dropdown-option" data-value="6">6</div>
-                  <div class="dropdown-option" data-value="7">7</div>
-                  <div class="dropdown-option" data-value="8">8</div>
-                  <div class="dropdown-option" data-value="9">9</div>
-                  <div class="dropdown-option" data-value="10">10</div>
-                  <div class="dropdown-option" data-value="11">11</div>
-                  <div class="dropdown-option" data-value="12">12</div>
-                  <div class="dropdown-option" data-value="13">13</div>
-                  <div class="dropdown-option" data-value="14">14</div>
-                  <div class="dropdown-option" data-value="15">15</div>
-                  <div class="dropdown-option" data-value="16">16</div>
-                  <div class="dropdown-option" data-value="17">17</div>
-                  <div class="dropdown-option" data-value="18">18</div>
-                  <div class="dropdown-option" data-value="19">19</div>
-                  <div class="dropdown-option" data-value="20">20</div>
-                  <div class="dropdown-option" data-value="21">21</div>
-                  <div class="dropdown-option" data-value="22">22</div>
-                  <div class="dropdown-option" data-value="23">23</div>
-                  <div class="dropdown-option" data-value="24">24</div>
-                  <div class="dropdown-option" data-value="25">25</div>
-                  <div class="dropdown-option" data-value="26">26</div>
-                  <div class="dropdown-option" data-value="27">27</div>
-                  <div class="dropdown-option" data-value="28">28</div>
-                  <div class="dropdown-option" data-value="29">29</div>
-                  <div class="dropdown-option" data-value="30">30</div>
-                  <div class="dropdown-option" data-value="31">31</div>
-                </div>
-                <input type="hidden" id="site-day-from" name="day" value="">
-              </div>
-
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="site-month-from-btn">
-                  <span id="site-month-from-text">Month</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="site-month-from-content">
-                  <div class="dropdown-option" data-value="">Month</div>
-                  <div class="dropdown-option" data-value="1">January</div>
-                  <div class="dropdown-option" data-value="2">February</div>
-                  <div class="dropdown-option" data-value="3">March</div>
-                  <div class="dropdown-option" data-value="4">April</div>
-                  <div class="dropdown-option" data-value="5">May</div>
-                  <div class="dropdown-option" data-value="6">June</div>
-                  <div class="dropdown-option" data-value="7">July</div>
-                  <div class="dropdown-option" data-value="8">August</div>
-                  <div class="dropdown-option" data-value="9">September</div>
-                  <div class="dropdown-option" data-value="10">October</div>
-                  <div class="dropdown-option" data-value="11">November</div>
-                  <div class="dropdown-option" data-value="12">December</div>
-                </div>
-                <input type="hidden" id="site-month-from" name="month" value="">
-              </div>
-
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="site-year-from-btn">
-                  <span id="site-year-from-text">Year</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="site-year-from-content">
-                  <div class="dropdown-option" data-value="">Year</div>
-                  <div class="dropdown-option" data-value="2026">2026</div>
-                  <div class="dropdown-option" data-value="2025">2025</div>
-                  <div class="dropdown-option" data-value="2024">2024</div>
-                  <div class="dropdown-option" data-value="2023">2023</div>
-                  <div class="dropdown-option" data-value="2022">2022</div>
-                  <div class="dropdown-option" data-value="2021">2021</div>
-                  <div class="dropdown-option" data-value="2020">2020</div>
-                </div>
-                <input type="hidden" id="site-year-from" name="year" value="">
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>To:</label>
-            <div style="display: flex; gap: 10px">
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="site-day-to-btn">
-                  <span id="site-day-to-text">Day</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="site-day-to-content">
-                  <div class="dropdown-option" data-value="">Day</div>
-                  <div class="dropdown-option" data-value="1">1</div>
-                  <div class="dropdown-option" data-value="2">2</div>
-                  <div class="dropdown-option" data-value="3">3</div>
-                  <div class="dropdown-option" data-value="4">4</div>
-                  <div class="dropdown-option" data-value="5">5</div>
-                  <div class="dropdown-option" data-value="6">6</div>
-                  <div class="dropdown-option" data-value="7">7</div>
-                  <div class="dropdown-option" data-value="8">8</div>
-                  <div class="dropdown-option" data-value="9">9</div>
-                  <div class="dropdown-option" data-value="10">10</div>
-                  <div class="dropdown-option" data-value="11">11</div>
-                  <div class="dropdown-option" data-value="12">12</div>
-                  <div class="dropdown-option" data-value="13">13</div>
-                  <div class="dropdown-option" data-value="14">14</div>
-                  <div class="dropdown-option" data-value="15">15</div>
-                  <div class="dropdown-option" data-value="16">16</div>
-                  <div class="dropdown-option" data-value="17">17</div>
-                  <div class="dropdown-option" data-value="18">18</div>
-                  <div class="dropdown-option" data-value="19">19</div>
-                  <div class="dropdown-option" data-value="20">20</div>
-                  <div class="dropdown-option" data-value="21">21</div>
-                  <div class="dropdown-option" data-value="22">22</div>
-                  <div class="dropdown-option" data-value="23">23</div>
-                  <div class="dropdown-option" data-value="24">24</div>
-                  <div class="dropdown-option" data-value="25">25</div>
-                  <div class="dropdown-option" data-value="26">26</div>
-                  <div class="dropdown-option" data-value="27">27</div>
-                  <div class="dropdown-option" data-value="28">28</div>
-                  <div class="dropdown-option" data-value="29">29</div>
-                  <div class="dropdown-option" data-value="30">30</div>
-                  <div class="dropdown-option" data-value="31">31</div>
-                </div>
-                <input type="hidden" id="site-day-to" name="day" value="">
-              </div>
-
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="site-month-to-btn">
-                  <span id="site-month-to-text">Month</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="site-month-to-content">
-                  <div class="dropdown-option" data-value="">Month</div>
-                  <div class="dropdown-option" data-value="1">January</div>
-                  <div class="dropdown-option" data-value="2">February</div>
-                  <div class="dropdown-option" data-value="3">March</div>
-                  <div class="dropdown-option" data-value="4">April</div>
-                  <div class="dropdown-option" data-value="5">May</div>
-                  <div class="dropdown-option" data-value="6">June</div>
-                  <div class="dropdown-option" data-value="7">July</div>
-                  <div class="dropdown-option" data-value="8">August</div>
-                  <div class="dropdown-option" data-value="9">September</div>
-                  <div class="dropdown-option" data-value="10">October</div>
-                  <div class="dropdown-option" data-value="11">November</div>
-                  <div class="dropdown-option" data-value="12">December</div>
-                </div>
-                <input type="hidden" id="site-month-to" name="month" value="">
-              </div>
-
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="site-year-to-btn">
-                  <span id="site-year-to-text">Year</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="site-year-to-content">
-                  <div class="dropdown-option" data-value="">Year</div>
-                  <div class="dropdown-option" data-value="2026">2026</div>
-                  <div class="dropdown-option" data-value="2025">2025</div>
-                  <div class="dropdown-option" data-value="2024">2024</div>
-                  <div class="dropdown-option" data-value="2023">2023</div>
-                  <div class="dropdown-option" data-value="2022">2022</div>
-                  <div class="dropdown-option" data-value="2021">2021</div>
-                  <div class="dropdown-option" data-value="2020">2020</div>
-                </div>
-                <input type="hidden" id="site-year-to" name="year" value="">
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="keywords">Keywords:</label>
-            <input
-              type="text"
-              id="keywords"
-              name="keywords"
-              placeholder="Enter keywords (comma separated)"
-              value=""
-            />
-          </div>
-
-          <div class="form-group">
-            <label for="custom-prompt">Custom Summary Prompt (Optional):</label>
-            <textarea
-              id="custom-prompt"
-              name="custom-prompt"
-              placeholder="E.g., Summarize focusing on performance and battery life."
-            ></textarea>
-          </div>
-
-          <div class="search-action-area">
-            <button type="submit" class="btn" id="searchSubmitBtn">Search Articles</button>
-
-            <!-- Real-Time Progress Indicator directly inside Search Site card -->
-            <div id="searchProgressContainer" class="progress-card hidden">
-              <div class="progress-header">
-                <div class="progress-spinner"></div>
-                <h3 id="progressTitle">Processing Search Request...</h3>
-              </div>
-              <div class="progress-bar-wrapper">
-                <div id="progressBar" class="progress-bar" style="width: 0%;"></div>
-              </div>
-              <div class="progress-steps">
-                <div id="step-1" class="progress-step"><span class="step-icon">🔍</span> Searching & Scraping</div>
-                <div id="step-2" class="progress-step"><span class="step-icon">📰</span> Validating Content</div>
-                <div id="step-3" class="progress-step"><span class="step-icon">🤖</span> AI Summarization & Sentiment</div>
-                <div id="step-4" class="progress-step"><span class="step-icon">✨</span> Rendering Summary Cards</div>
-              </div>
-              <p id="progressMessage" class="progress-detail">Initializing request...</p>
-            </div>
-          </div>
-        </form>
-      </div>
-
-      <div class="card">
-        <h2>Search database</h2>
-        <form id="databaseSearchForm">
-          <div class="form-group">
-            <label>Choose Websites:</label>
-            <div class="custom-dropdown">
-              <div class="dropdown-button" id="databaseWebsiteDropdownButton">
-                <span id="databaseWebsiteDropdownText">Select websites...</span>
-                <span class="dropdown-arrow">▼</span>
-              </div>
-              <div class="dropdown-content" id="databaseWebsiteDropdownContent">
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="database-websites"
-                    value="https://www.tomshardware.com/search"
-                    id="db-website1"
-                  />
-                  <label for="db-website1">Tom's Hardware</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="database-websites"
-                    value="https://www.pcmag.com/search/results"
-                    id="db-website2"
-                  />
-                  <label for="db-website2">PC Mag</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="database-websites"
-                    value="https://thepcenthusiast.com/"
-                    id="db-website3"
-                  />
-                  <label for="db-website3">The PC Enthusiast</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="database-websites"
-                    value="https://hothardware.com/search"
-                    id="db-website4"
-                  />
-                  <label for="db-website4">Hot Hardware</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="database-websites"
-                    value="https://pcper.com/"
-                    id="db-website5"
-                  />
-                  <label for="db-website5">PC Perspective</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="database-websites"
-                    value="https://gamerant.com/search"
-                    id="db-website6"
-                  />
-                  <label for="db-website6">GameRant</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="database-websites"
-                    value="https://www.windowscentral.com/search"
-                    id="db-website7"
-                  />
-                  <label for="db-website7">Windows Central</label>
-                </div>
-                <div class="dropdown-option">
-                  <input
-                    type="checkbox"
-                    name="database-websites"
-                    value="https://www.techradar.com/search"
-                    id="db-website8"
-                  />
-                  <label for="db-website8">Tech Radar</label>
-                </div>
-                <div class="dropdown-option" style="border-top: 1px solid #ddd">
-                  <input type="checkbox" id="databaseSelectAll" />
-                  <label for="databaseSelectAll"
-                    ><strong>Select All</strong></label
-                  >
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <div style="display: flex; gap: 10px; align-items: flex-end">
-              <div style="flex: 2">
-                <label for="database-search">Search terms</label>
-                <input
-                  type="text"
-                  id="database-search"
-                  name="search"
-                  placeholder="Enter search terms..."
-                  style="width: 100%"
-                />
-              </div>
-              <div style="flex: 1">
-                <label
-                  for="database-amount"
-                  style="margin-bottom: 5px; font-size: 14px"
-                  >Limit</label
-                >
-                <div class="number-input-container" style="width: 100%">
-                  <input
-                    type="number"
-                    id="database-amount"
-                    name="amount"
-                    min="0"
-                    max="100"
-                    value="1"
-                    style="width: 100%"
-                  />
-                  <div class="number-input-arrows">
-                    <div class="number-input-arrow up">▲</div>
-                    <div class="number-input-arrow down">▼</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>From:</label>
-            <div style="display: flex; gap: 10px">
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="database-day-from-btn">
-                  <span id="database-day-from-text">Day</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="database-day-from-content">
-                  <div class="dropdown-option" data-value="">Day</div>
-                  <div class="dropdown-option" data-value="1">1</div>
-                  <div class="dropdown-option" data-value="2">2</div>
-                  <div class="dropdown-option" data-value="3">3</div>
-                  <div class="dropdown-option" data-value="4">4</div>
-                  <div class="dropdown-option" data-value="5">5</div>
-                  <div class="dropdown-option" data-value="6">6</div>
-                  <div class="dropdown-option" data-value="7">7</div>
-                  <div class="dropdown-option" data-value="8">8</div>
-                  <div class="dropdown-option" data-value="9">9</div>
-                  <div class="dropdown-option" data-value="10">10</div>
-                  <div class="dropdown-option" data-value="11">11</div>
-                  <div class="dropdown-option" data-value="12">12</div>
-                  <div class="dropdown-option" data-value="13">13</div>
-                  <div class="dropdown-option" data-value="14">14</div>
-                  <div class="dropdown-option" data-value="15">15</div>
-                  <div class="dropdown-option" data-value="16">16</div>
-                  <div class="dropdown-option" data-value="17">17</div>
-                  <div class="dropdown-option" data-value="18">18</div>
-                  <div class="dropdown-option" data-value="19">19</div>
-                  <div class="dropdown-option" data-value="20">20</div>
-                  <div class="dropdown-option" data-value="21">21</div>
-                  <div class="dropdown-option" data-value="22">22</div>
-                  <div class="dropdown-option" data-value="23">23</div>
-                  <div class="dropdown-option" data-value="24">24</div>
-                  <div class="dropdown-option" data-value="25">25</div>
-                  <div class="dropdown-option" data-value="26">26</div>
-                  <div class="dropdown-option" data-value="27">27</div>
-                  <div class="dropdown-option" data-value="28">28</div>
-                  <div class="dropdown-option" data-value="29">29</div>
-                  <div class="dropdown-option" data-value="30">30</div>
-                  <div class="dropdown-option" data-value="31">31</div>
-                </div>
-                <input type="hidden" id="database-day-from" name="day" value="">
-              </div>
-
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="database-month-from-btn">
-                  <span id="database-month-from-text">Month</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="database-month-from-content">
-                  <div class="dropdown-option" data-value="">Month</div>
-                  <div class="dropdown-option" data-value="1">January</div>
-                  <div class="dropdown-option" data-value="2">February</div>
-                  <div class="dropdown-option" data-value="3">March</div>
-                  <div class="dropdown-option" data-value="4">April</div>
-                  <div class="dropdown-option" data-value="5">May</div>
-                  <div class="dropdown-option" data-value="6">June</div>
-                  <div class="dropdown-option" data-value="7">July</div>
-                  <div class="dropdown-option" data-value="8">August</div>
-                  <div class="dropdown-option" data-value="9">September</div>
-                  <div class="dropdown-option" data-value="10">October</div>
-                  <div class="dropdown-option" data-value="11">November</div>
-                  <div class="dropdown-option" data-value="12">December</div>
-                </div>
-                <input type="hidden" id="database-month-from" name="month" value="">
-              </div>
-
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="database-year-from-btn">
-                  <span id="database-year-from-text">Year</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="database-year-from-content">
-                  <div class="dropdown-option" data-value="">Year</div>
-                  <div class="dropdown-option" data-value="2025">2026</div>
-                  <div class="dropdown-option" data-value="2025">2025</div>
-                  <div class="dropdown-option" data-value="2024">2024</div>
-                  <div class="dropdown-option" data-value="2023">2023</div>
-                  <div class="dropdown-option" data-value="2022">2022</div>
-                  <div class="dropdown-option" data-value="2021">2021</div>
-                  <div class="dropdown-option" data-value="2020">2020</div>
-                </div>
-                <input type="hidden" id="database-year-from" name="year" value="">
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>To:</label>
-            <div style="display: flex; gap: 10px">
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="database-day-to-btn">
-                  <span id="database-day-to-text">Day</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="database-day-to-content">
-                  <div class="dropdown-option" data-value="">Day</div>
-                  <div class="dropdown-option" data-value="1">1</div>
-                  <div class="dropdown-option" data-value="2">2</div>
-                  <div class="dropdown-option" data-value="3">3</div>
-                  <div class="dropdown-option" data-value="4">4</div>
-                  <div class="dropdown-option" data-value="5">5</div>
-                  <div class="dropdown-option" data-value="6">6</div>
-                  <div class="dropdown-option" data-value="7">7</div>
-                  <div class="dropdown-option" data-value="8">8</div>
-                  <div class="dropdown-option" data-value="9">9</div>
-                  <div class="dropdown-option" data-value="10">10</div>
-                  <div class="dropdown-option" data-value="11">11</div>
-                  <div class="dropdown-option" data-value="12">12</div>
-                  <div class="dropdown-option" data-value="13">13</div>
-                  <div class="dropdown-option" data-value="14">14</div>
-                  <div class="dropdown-option" data-value="15">15</div>
-                  <div class="dropdown-option" data-value="16">16</div>
-                  <div class="dropdown-option" data-value="17">17</div>
-                  <div class="dropdown-option" data-value="18">18</div>
-                  <div class="dropdown-option" data-value="19">19</div>
-                  <div class="dropdown-option" data-value="20">20</div>
-                  <div class="dropdown-option" data-value="21">21</div>
-                  <div class="dropdown-option" data-value="22">22</div>
-                  <div class="dropdown-option" data-value="23">23</div>
-                  <div class="dropdown-option" data-value="24">24</div>
-                  <div class="dropdown-option" data-value="25">25</div>
-                  <div class="dropdown-option" data-value="26">26</div>
-                  <div class="dropdown-option" data-value="27">27</div>
-                  <div class="dropdown-option" data-value="28">28</div>
-                  <div class="dropdown-option" data-value="29">29</div>
-                  <div class="dropdown-option" data-value="30">30</div>
-                  <div class="dropdown-option" data-value="31">31</div>
-                </div>
-                <input type="hidden" id="database-day-to" name="day" value="">
-              </div>
-
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="database-month-to-btn">
-                  <span id="database-month-to-text">Month</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="database-month-to-content">
-                  <div class="dropdown-option" data-value="">Month</div>
-                  <div class="dropdown-option" data-value="1">January</div>
-                  <div class="dropdown-option" data-value="2">February</div>
-                  <div class="dropdown-option" data-value="3">March</div>
-                  <div class="dropdown-option" data-value="4">April</div>
-                  <div class="dropdown-option" data-value="5">May</div>
-                  <div class="dropdown-option" data-value="6">June</div>
-                  <div class="dropdown-option" data-value="7">July</div>
-                  <div class="dropdown-option" data-value="8">August</div>
-                  <div class="dropdown-option" data-value="9">September</div>
-                  <div class="dropdown-option" data-value="10">October</div>
-                  <div class="dropdown-option" data-value="11">November</div>
-                  <div class="dropdown-option" data-value="12">December</div>
-                </div>
-                <input type="hidden" id="database-month-to" name="month" value="">
-              </div>
-
-              <div class="custom-dropdown" style="flex: 1">
-                <div class="dropdown-button" id="database-year-to-btn">
-                  <span id="database-year-to-text">Year</span>
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <div class="dropdown-content" id="database-year-to-content">
-                  <div class="dropdown-option" data-value="">Year</div>
-                  <div class="dropdown-option" data-value="2025">2025</div>
-                  <div class="dropdown-option" data-value="2024">2024</div>
-                  <div class="dropdown-option" data-value="2023">2023</div>
-                  <div class="dropdown-option" data-value="2022">2022</div>
-                  <div class="dropdown-option" data-value="2021">2021</div>
-                  <div class="dropdown-option" data-value="2020">2020</div>
-                </div>
-                <input type="hidden" id="database-year-to" name="year" value="">
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="database-keywords">Keywords:</label>
-            <input
-              type="text"
-              id="database-keywords"
-              name="keywords"
-              placeholder="Enter keywords (comma separated)"
-              value=""
-            />
-            <label for="database-urls">URLs:</label>
-            <input
-              type="text"
-              id="database-urls"
-              name="urls"
-              placeholder="Enter URLs (comma separated)"
-              value=""
-            />
-          </div>
-
-          <button type="submit" class="btn">Search Database</button>
-          <button type="button" class="btn" id="recent-ten">Recently Saved</button>
-          <button type="button" class="btn" id="saved-all">Display All Saved</button>
-        </form>
-      </div>
-
-      <div class="card" id="articles-card">
-        <div
-          style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-          "
-        >
-          <h2 id="article-search-status">Articles Found</h2>
-          <div
-            id="button-container"
-            style="display: flex; width: fit-content; gap: 10px"
-          >
-            <button type="button" id="selectionsBtn" style="display: none">
-              Clear Selections
-            </button>
-            <button style="display: none" type="button" id="clearArticlesBtn">
-              Clear All
-            </button>
-            <button style="display: none" type="button" id="saveArticlesBtn">
-              Save All
-            </button>
-            <button style="display: none" type="button" id="emailArticlesBtn">
-              Email All
-            </button>
-            <button style="display: none" type="button" id="saveToFileBtn">
-              Save to File
-            </button>
-          </div>
-        </div>
-
-        <div id="activity-log"></div>
-      </div>
-      <!-- Back to Top Button -->
-      <button
-        id="backToTopBtn"
-        style="
-          position: fixed;
-          bottom: 20px;
-          right: 20px;
-          padding: 10px 14px;
-          font-size: 16px;
-          border: none;
-          border-radius: 8px;
-          background-color: #333;
-          color: white;
-          cursor: pointer;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-          display: none;
-          z-index: 1000;
-        "
-      >
-        ↑ Top
-      </button>
-    </div>
-
-    <!-- Modal container (hidden by default) -->
-    <div id="emailModal" class="modal">
-      <div class="modal-content">
-        <h2>Enter Your Email</h2>
-        <input id="emailInput" type="email" placeholder="your@email.com" />
-        <div class="buttons">
-          <button id="cancelBtn">Cancel</button>
-          <button id="submitBtn">Submit</button>
+        <div class="nav-links" id="navLinks">
+          <a href="#features" class="nav-link">Features</a>
+          <a href="#architecture" class="nav-link">Architecture</a>
+          <a href="#sources" class="nav-link">Sources</a>
+          <a href="#workflow" class="nav-link">How It Works</a>
+          <a href="./app" class="btn btn-launch" id="launchTopBtn">
+            Try App
+            <svg class="btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </a>
         </div>
       </div>
-    </div>
+    </nav>
 
-    <script src="main.js"></script>
+    <main>
+      <!-- Hero Section -->
+      <section class="hero-section" id="heroSection">
+        <div class="hero-content">
+
+          <h1 class="hero-title" id="mainHeading">
+            Instant Tech Intelligence,
+            <span class="text-gradient">Summarized with Precision</span>
+          </h1>
+
+          <p class="hero-subtitle">
+            Cut through tech news noise. Aggregate, analyze, and extract structured 3-category sentiment from premier technology publications in seconds with high-concurrency LLM inference.
+          </p>
+
+          <div class="hero-actions">
+            <a href="./app" class="btn btn-hero-primary" id="heroStartBtn">
+              Try it
+              <!-- <svg class="btn-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg> -->
+            </a>
+            <a href="#demoPreview" class="btn btn-hero-secondary" id="heroExploreBtn">
+              Explore Demo
+            </a>
+          </div>
+
+          <!-- Quick Metrics Bar -->
+          <!-- <div class="hero-metrics">
+            <div class="metric-item">
+              <span class="metric-value">8</span>
+              <span class="metric-label">Tech Publications</span>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metric-item">
+              <span class="metric-value">1-Click</span>
+              <span class="metric-label">Email & HTML Export</span>
+            </div>
+          </div> -->
+        </div>
+
+        <!-- Interactive Authentic Preview Card -->
+        <div class="hero-preview-container" id="demoPreview">
+          <div class="preview-browser-card">
+            <div class="preview-browser-header">
+              <div class="browser-dots">
+                <span class="dot dot-red"></span>
+                <span class="dot dot-yellow"></span>
+                <span class="dot dot-green"></span>
+              </div>
+              <div class="browser-address">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <span>summarizer.howard1218.site</span>
+              </div>
+            </div>
+
+            <div class="preview-card-body">
+              <!-- Mock Search Form Status Bar -->
+              <div class="preview-mock-query">
+                <div class="mock-query-left">
+                  <span class="mock-badge">Tom's Hardware</span>
+                  <span class="mock-badge">PC Mag</span>
+                  <span class="mock-query-term">Query: "RTX 5090 Blackwell architecture"</span>
+                </div>
+                <div class="mock-status">
+                  Completed in 1.8s
+                </div>
+              </div>
+
+              <!-- Interactive Simulated Article Container (Exact App Structure) -->
+              <div class="article-container mock-article-card" id="interactiveMockArticle">
+                <section class="article-analysis demo-analysis">
+                  <!-- Checkbox Selection Control -->
+                  <!-- <div class="demo-checkbox-bar">
+                    <label class="demo-checkbox-label">
+                      <input type="checkbox" id="mockDemoCheckbox" checked />
+                      <span>Select article for batch operations</span>
+                    </label>
+                  </div> -->
+
+                  <!-- 1. Authentic Article Information Table -->
+                  <h2 class="demo-section-heading">Article Information</h2>
+                  <div class="demo-table-wrapper">
+                    <table class="demo-info-table">
+                      <tbody>
+                        <tr>
+                          <th>Website</th>
+                          <td>Tom's Hardware</td>
+                        </tr>
+                        <tr>
+                          <th>Title</th>
+                          <td>Nvidia GeForce RTX 5090 Review: Blackwell Architecture Breakthrough</td>
+                        </tr>
+                        <tr>
+                          <th>Author</th>
+                          <td>Jarred Walton</td>
+                        </tr>
+                        <tr>
+                          <th>Publish Date</th>
+                          <td>Today</td>
+                        </tr>
+                        <tr>
+                          <th>Keywords</th>
+                          <td>Blackwell, RTX 5090, GDDR7, DLSS, Performance, Benchmarks</td>
+                        </tr>
+                        <tr>
+                          <th>Article Preview</th>
+                          <td>
+                            <div class="link-preview-card demo-preview-card">
+                              <div class="link-preview-details">
+                                <span class="link-preview-site">Tom's Hardware</span>
+                                <a href="https://www.tomshardware.com" target="_blank" rel="noreferrer" class="link-preview-title">Nvidia GeForce RTX 5090 Review: Blackwell Architecture Breakthrough</a>
+                                <p class="link-preview-desc">Nvidia's flagship Blackwell GPU showcases major gen-over-gen performance uplifts with GDDR7 memory and 3rd-generation RT cores. Power consumption is kept in check with refined thermals...</p>
+                                <div class="link-preview-meta">
+                                  <span class="link-preview-author">By Jarred Walton</span>
+                                  <span class="link-preview-divider">&bull;</span>
+                                  <span class="link-preview-date">Today</span>
+                                </div>
+                              </div>
+                              <div class="link-preview-thumbnail demo-thumb-container">
+                                <img src="preview_thumb.jpg" alt="RTX 5090 Preview Thumbnail" loading="lazy" />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <!-- 2. Authentic 7-Point Summary Box -->
+                  <h2 class="demo-section-heading">Summary</h2>
+                  <ul class="summary-box demo-summary-box">
+                    <li>Blackwell GB202 architecture features 24,576 CUDA cores manufactured on TSMC's custom 4NP process node.</li>
+                    <li>Equipped with 32 GB of ultra-fast 512-bit GDDR7 VRAM delivering up to 1,792 GB/s memory bandwidth.</li>
+                    <li>Demonstrates a 35% to 48% rasterization uplift and up to 60% ray tracing performance boost over the RTX 4090.</li>
+                    <li>Native integration of DLSS 4 multi-frame generation technology with sub-millisecond tensor processing overhead.</li>
+                    <li>Redesigned dual-flow vapor chamber thermal solution maintains GPU core temperatures under 68&deg;C under full load.</li>
+                    <li>MSRP positioned at $1,999, targeted strictly at halo enthusiasts, creative pros, and local AI developers.</li>
+                    <li>Outperforms competing desktop hardware in FP8 matrix computing and generative token generation velocity.</li>
+                  </ul>
+
+                  <!-- 3. Authentic 3-Category Sentiment Analysis Grid -->
+                  <h2 class="demo-section-heading">Sentiment Analysis</h2>
+                  <div class="sentiment-section demo-sentiment-grid">
+                    <div class="sentiment-block positive">
+                      <h3>Positive</h3>
+                      <ul>
+                        <li>Massive memory bandwidth gains with 512-bit GDDR7 memory interface.</li>
+                        <li>Substantial ray tracing and rasterization gains over previous generation.</li>
+                        <li>Quiet acoustics and efficient thermals with redesigned vapor chamber.</li>
+                      </ul>
+                    </div>
+                    <div class="sentiment-block neutral">
+                      <h3>Neutral</h3>
+                      <ul>
+                        <li>Premium $1,999 pricing reflects enthusiast workstation positioning.</li>
+                        <li>600W total board power requires a dedicated 12V-2x6 PCIe 5.1 cable.</li>
+                        <li>Large 3.5-slot footprint necessitates spacious ATX chassis.</li>
+                      </ul>
+                    </div>
+                    <div class="sentiment-block negative">
+                      <h3>Negative</h3>
+                      <ul>
+                        <li>Extremely constrained launch availability expected across major retailers.</li>
+                        <li>High power draw demands upgraded 1000W+ power supplies for older rigs.</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <!-- Interactive Batch Action Bar -->
+                  <!-- <div class="mock-actions-row">
+                    <div class="mock-actions-left">
+                      <button class="mock-action-btn" id="mockSaveBtn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                        <span id="mockSaveText">Save all</span>
+                      </button>
+                      <button class="mock-action-btn" id="mockEmailBtn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        <span id="mockEmailText">Email 1 article</span>
+                      </button>
+                      <button class="mock-action-btn" id="mockExportBtn" title="Download standalone offline summaries.html">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        <span id="mockExportText">Export 1 as HTML</span>
+                      </button>
+                      <button class="mock-action-btn" id="mockClearBtn" title="Clear selection">
+                        <span id="mockClearText">Clear selection</span>
+                      </button>
+                    </div>
+                  </div> -->
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Features Section -->
+      <section class="features-section" id="features">
+        <div class="section-header">
+          <h2 class="section-title">Minimalist Design, Maximum Analytical Power</h2>
+          <p class="section-subtitle">
+            Built from the ground up for engineers, researchers, and tech enthusiasts who value concise, signal-dense data without advertising clutter.
+          </p>
+        </div>
+
+        <div class="features-grid">
+          <!-- Feature 1 -->
+          <div class="card feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+            </div>
+            <h3>Real-Time 4-Stage SSE Streaming</h3>
+            <p>
+              Experience zero-latency feedback. Server-Sent Events stream live progress across 4 precise stages: publication scraping with live per-site progress indicators, DOM & metadata parsing, parallel Groq LLM inference, and formatted summary delivery.
+            </p>
+          </div>
+
+          <!-- Feature 2 -->
+          <div class="card feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                <line x1="15" y1="9" x2="15.01" y2="9"></line>
+              </svg>
+            </div>
+            <h3>Structured 3-Category Sentiment</h3>
+            <p>
+              Evaluate hardware reception with 3 qualitative categories—Positive highlights, Neutral specifications, and Negative limitations. Grounded takeaways cleanly isolate strengths from drawbacks without arbitrary numbers or hallucinated ratings.
+            </p>
+          </div>
+
+          <!-- Feature 3 -->
+          <div class="card feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              </svg>
+            </div>
+            <h3>Concise 7-Point Executive Summaries</h3>
+            <p>
+              Strict programmatic limits cap summaries to at most 7 high-impact bullet points. The prompt architecture prioritizes brand mentions, benchmark performance, price, brand comparisons, and matched keywords.
+            </p>
+          </div>
+
+          <!-- Feature 4 -->
+          <div class="card feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+            </div>
+            <h3>Custom Prompt Directives</h3>
+            <p>
+              Guide the AI to extract exactly what you need. Specify focus areas such as power efficiency, pricing analysis, thermal dissipation, or architectural changes, while maintaining strict summarization bounds.
+            </p>
+          </div>
+
+          <!-- Feature 5 -->
+          <div class="card feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+              </svg>
+            </div>
+            <h3>Supabase PostgreSQL Archive</h3>
+            <p>
+              Persist analyses seamlessly to cloud PostgreSQL. Search historical records by publication, exact URLs, author/title keywords, or date bounds, or instantly fetch the 10 most recent saves or all saved articles in 1 click.
+            </p>
+          </div>
+
+          <!-- Feature 6 -->
+          <div class="card feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+            </div>
+            <h3>Zero-Trust Prompt Sanitization</h3>
+            <p>
+              Multi-layer security filters intercept prompt jailbreaks, instruction overrides ("DAN mode", "ignore previous"), code/game generation requests, and off-topic queries before LLM execution, ensuring uninterrupted safety.
+            </p>
+          </div>
+
+          <!-- Feature 7 -->
+          <div class="card feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </div>
+            <h3>Offline HTML & Resend Email Export</h3>
+            <p>
+              Generate standalone offline HTML reports (<code>summaries.html</code>) with embedded dark styles and link preview cards via browser Blob downloads, or dispatch rich digests to any verified email via Resend API.
+            </p>
+          </div>
+
+          <!-- Feature 8 -->
+          <div class="card feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            </div>
+            <h3>High-Throughput Concurrency & Resilience</h3>
+            <p>
+              Leverages <code>AsyncGroq</code> and Python <code>asyncio.gather()</code> for multi-article parallel execution. Includes automated exponential backoff on HTTP 429 rate limits, payload auto-truncation for HTTP 413, and multi-model fallback.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- System Architecture & Engineering Section -->
+      <section class="architecture-section" id="architecture">
+        <div class="section-header">
+          <h2 class="section-title">Under the Hood: High-Concurrency Pipeline</h2>
+          <p class="section-subtitle">
+            A non-blocking full-stack architecture combining FastAPI, BeautifulSoup DOM scrapers, Groq Cloud inference, and Supabase PostgreSQL.
+          </p>
+        </div>
+
+        <div class="arch-grid">
+          <!-- Arch Card 1 -->
+          <div class="arch-card">
+            <div class="arch-header">
+              <div class="arch-badge">LAYER 1</div>
+              <h3>Web Scraping & Metadata Engine</h3>
+            </div>
+            <p class="arch-desc">
+              Executes concurrent article scraping across 8 premier tech publications using BeautifulSoup4. Resolves OpenGraph (<code>og:image</code>, <code>og:description</code>) and Twitter Cards metadata for rich card link previews.
+            </p>
+            <ul class="arch-list">
+              <li><strong>Tuple Date Comparison:</strong> Replaced complex conditional trees with <code>(year, month, day)</code> tuple range filtering.</li>
+              <li><strong>Relative Date Parsing:</strong> Converts "X hours ago" and "X days ago" relative timestamps to calendar dates.</li>
+              <li><strong>Word Limit Filtering:</strong> Drops bloated multi-page listicles exceeding word thresholds to preserve token capacity.</li>
+            </ul>
+            <div class="arch-tags">
+              <span class="arch-tag">BeautifulSoup4</span>
+              <span class="arch-tag">OpenGraph</span>
+              <span class="arch-tag">Tuple Comparators</span>
+            </div>
+          </div>
+
+          <!-- Arch Card 2 -->
+          <div class="arch-card">
+            <div class="arch-header">
+              <div class="arch-badge">LAYER 2</div>
+              <h3>AI Inference & 50% Token Optimization</h3>
+            </div>
+            <p class="arch-desc">
+              Orchestrated via <code>AsyncGroq</code> running the primary <code>groq/compound-mini</code> model with fallback across <code>groq/compound</code> and <code>openai/gpt-oss-120b</code>.
+            </p>
+            <ul class="arch-list">
+              <li><strong>Single Combined Prompt:</strong> Combines 7-point summary and 3-tier sentiment analysis into one prompt, cutting input tokens by 50%.</li>
+              <li><strong>Exponential Retry Backoff:</strong> Automatically sleeps 1.2s and 2.4s on Groq HTTP 429 rate limit bursts.</li>
+              <li><strong>Payload Truncation Buffer:</strong> Handles HTTP 413 request size limits by trimming user text to 3,000 characters and retrying cleanly.</li>
+            </ul>
+            <div class="arch-tags">
+              <span class="arch-tag">AsyncGroq</span>
+              <span class="arch-tag">compound-mini</span>
+              <span class="arch-tag">Combined Prompting</span>
+            </div>
+          </div>
+
+          <!-- Arch Card 3 -->
+          <div class="arch-card">
+            <div class="arch-header">
+              <div class="arch-badge">LAYER 3</div>
+              <h3>Server-Sent Events & Real-Time UX</h3>
+            </div>
+            <p class="arch-desc">
+              Delivers live progress via FastAPI <code>StreamingResponse</code> with <code>text/event-stream</code>. The frontend decodes binary chunks using <code>ReadableStreamDefaultReader</code> and <code>TextDecoder</code>.
+            </p>
+            <ul class="arch-list">
+              <li><strong>Live Per-Publication Feedback:</strong> Shows real-time publication names and 10%&ndash;100% stage completions.</li>
+              <li><strong>Local State Persistence:</strong> Caches active summaries in <code>localStorage</code>, restoring articles upon browser reload.</li>
+              <li><strong>Batch Selection Bar:</strong> Checkbox controls dynamically update actions (Save X, Email X, Export X, Clear X).</li>
+            </ul>
+            <div class="arch-tags">
+              <span class="arch-tag">FastAPI SSE</span>
+              <span class="arch-tag">ReadableStream</span>
+              <span class="arch-tag">LocalStorage</span>
+            </div>
+          </div>
+
+          <!-- Arch Card 4 -->
+          <div class="arch-card">
+            <div class="arch-header">
+              <div class="arch-badge">LAYER 4</div>
+              <h3>Persistence & Dynamic Migration</h3>
+            </div>
+            <p class="arch-desc">
+              Manages cloud persistence with Supabase PostgreSQL. Supports complex multi-criteria queries and automated content migration.
+            </p>
+            <ul class="arch-list">
+              <li><strong>Upsert Deduplication:</strong> Prevents duplicate records using <code>on_conflict="url"</code> upsert operations.</li>
+              <li><strong>Dynamic Preview Backfill:</strong> Automated engine scans saved records and injects missing OpenGraph preview cards.</li>
+              <li><strong>Lifespan Shutdown Flush:</strong> Flushes active in-memory session dictionaries to Supabase upon server shutdown.</li>
+            </ul>
+            <div class="arch-tags">
+              <span class="arch-tag">Supabase</span>
+              <span class="arch-tag">PostgreSQL</span>
+              <span class="arch-tag">Resend API</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Supported Sources Section -->
+      <section class="sources-section" id="sources">
+        <div class="section-header">
+          <h2 class="section-title">Direct Scraper Integration</h2>
+          <p class="section-subtitle">
+            Fine-tuned scraping pipelines custom built for the internet's top hardware, enthusiast, and consumer tech sources.
+          </p>
+        </div>
+
+        <div class="sources-grid">
+          <div class="source-tag">
+            <span class="source-bullet"></span>
+            Tom's Hardware
+          </div>
+          <div class="source-tag">
+            <span class="source-bullet"></span>
+            PC Mag
+          </div>
+          <div class="source-tag">
+            <span class="source-bullet"></span>
+            The PC Enthusiast
+          </div>
+          <div class="source-tag">
+            <span class="source-bullet"></span>
+            Hot Hardware
+          </div>
+          <div class="source-tag">
+            <span class="source-bullet"></span>
+            PC Perspective
+          </div>
+          <div class="source-tag">
+            <span class="source-bullet"></span>
+            GameRant
+          </div>
+          <div class="source-tag">
+            <span class="source-bullet"></span>
+            Windows Central
+          </div>
+          <div class="source-tag">
+            <span class="source-bullet"></span>
+            Tech Radar
+          </div>
+        </div>
+      </section>
+
+      <!-- Workflow / Steps Section -->
+      <section class="workflow-section" id="workflow">
+        <div class="section-header">
+          <h2 class="section-title">From Query to Intelligence in 3 Steps</h2>
+          <p class="section-subtitle">
+            An intuitive UI engineered to minimize interaction fatigue and deliver insights immediately.
+          </p>
+        </div>
+
+        <div class="workflow-grid">
+          <div class="workflow-card">
+            <div class="step-badge">01</div>
+            <h3>Select & Configure</h3>
+            <p>
+              Choose target publications from custom multi-select menus, enter search terms, configure date bounds, and optionally supply custom summary focus prompts.
+            </p>
+          </div>
+
+          <div class="workflow-card">
+            <div class="step-badge">02</div>
+            <h3>Stream & Analyze</h3>
+            <p>
+              Watch the glowing progress bar advance in real-time as scrapers pull article DOMs, extract link previews, and Groq generates succinct 7-point summaries and 3-category sentiment analysis.
+            </p>
+          </div>
+
+          <div class="workflow-card">
+            <div class="step-badge">03</div>
+            <h3>Batch Save, Email or Export</h3>
+            <p>
+              Select key articles via batch checkboxes, persist to your Supabase archive, dispatch an email digest via Resend API, or download a standalone offline HTML report.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA Banner -->
+      <section class="cta-section">
+        <div class="cta-card">
+          <h2 class="cta-title">Ready to elevate your tech reading?</h2>
+          <p class="cta-desc">
+            Experience real-time AI summarization and 3-category sentiment analysis across the web's leading technology publications.
+          </p>
+          <div class="cta-actions">
+            <a href="./app" class="btn btn-hero-primary" id="ctaLaunchBtn">
+              Launch Article Summarizer
+              <svg class="btn-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Landing Footer -->
+    <footer class="landing-footer">
+      <div class="footer-container">
+        <div class="footer-left">
+          <div class="footer-brand">
+            <span>Article Summarizer</span>
+          </div>
+          <p class="footer-copyright">
+            Minimalist technology news summarization & sentiment analysis platform.
+          </p>
+        </div>
+        <div class="footer-right">
+          <a href="https://github.com/howardlin1218/article-summarizer" target="_blank" rel="noreferrer" class="footer-link">GitHub</a>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Back to Top Button -->
+    <button id="backToTopBtn" class="back-to-top" aria-label="Back to top" title="Back to top">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="18 15 12 9 6 15"></polyline>
+      </svg>
+    </button>
+
+    <!-- Interactive script for landing page -->
+    <script src="landing.js"></script>
   </body>
 </html>

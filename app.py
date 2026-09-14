@@ -4,12 +4,15 @@ import json
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Dict
 
 from fastapi import FastAPI, Request, Response, HTTPException, status
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from cachetools import TTLCache
 
 from schemas import (
     EmailRequest, SaveDatabaseRequest, SearchSiteRequest, SearchDatabaseRequest
@@ -24,9 +27,16 @@ from database import (
 
 load_dotenv()
 
-# User-specific dictionaries keyed by session ID
-session_json_dicts: Dict[str, dict] = {}
-session_email_dicts: Dict[str, dict] = {}
+# Rate limiting: Disabled during test runs to ensure deterministic CI execution
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["120/minute"],
+    enabled=os.getenv("BUILD_ENV") != "test"
+)
+
+# User-specific bounded caches with 1-hour TTL and maximum 1,000 active sessions (prevents memory leak DoS)
+session_json_dicts: TTLCache = TTLCache(maxsize=1000, ttl=3600)
+session_email_dicts: TTLCache = TTLCache(maxsize=1000, ttl=3600)
 
 def get_or_create_session_id(request: Request, response: Response) -> str:
     session_id = request.cookies.get("user_session_id")
@@ -54,13 +64,22 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(insert_to_supabase, all_articles)
 
 app = FastAPI(title="Article Summarizer API", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS Configuration
-origins = [
-    "http://127.0.0.1:5501",
-    "https://www.summarizer.howard1218.site",
-    "https://summarizer.howard1218.site"
-]
+raw_origins = os.getenv("CORS_ORIGINS")
+if raw_origins:
+    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+else:
+    origins = [
+        "http://127.0.0.1:5501",
+        "http://127.0.0.1:5500",
+        "http://localhost:5501",
+        "http://localhost:5500",
+        "https://www.summarizer.howard1218.site",
+        "https://summarizer.howard1218.site"
+    ]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -70,6 +89,7 @@ app.add_middleware(
 )
 
 @app.post("/api/email-to-user")
+@limiter.limit("5/hour")
 async def email_to_user(payload: EmailRequest, request: Request, response: Response):
     if not payload.email_address or not is_valid_email(payload.email_address):
         raise HTTPException(status_code=400, detail="Please provide a valid email address.")
@@ -105,6 +125,7 @@ async def save_to_database(payload: SaveDatabaseRequest, request: Request, respo
     return {"status": "success", "message": f"Saved {len(list_of_json_data)} article(s) successfully to database"}
 
 @app.post("/api/search-site")
+@limiter.limit("15/minute")
 async def search_site(payload: SearchSiteRequest, request: Request, response: Response):
     if payload.customPrompt and not is_safe_and_relevant_prompt(payload.customPrompt):
         raise HTTPException(
@@ -150,6 +171,7 @@ async def search_site(payload: SearchSiteRequest, request: Request, response: Re
     return {"status": "success", "message": "returning json", "html": return_str}
 
 @app.post("/api/search-site-stream")
+@limiter.limit("15/minute")
 async def search_site_stream(payload: SearchSiteRequest, request: Request, response: Response):
     """
     Search articles across selected websites and stream real-time progress via SSE.
@@ -288,6 +310,7 @@ async def get_all_saved_articles(request: Request, response: Response):
     }
 
 @app.post("/api/search-database")
+@limiter.limit("30/minute")
 async def search_database(payload: SearchDatabaseRequest, request: Request, response: Response):
     start_date = 0
     end_date = 0
@@ -327,7 +350,8 @@ async def search_database(payload: SearchDatabaseRequest, request: Request, resp
     }
 
 @app.get("/api/health")
-async def health_check():
+@limiter.limit("60/minute")
+async def health_check(request: Request):
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 if __name__ == "__main__":
