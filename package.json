@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "tsc -p public_html",
-    "watch": "tsc -p public_html -w"
+    "build": "tsc -p public_html/app",
+    "watch": "tsc -p public_html/app -w"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
