@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from typing import List, Optional
 
 class EmailRequest(BaseModel):
@@ -11,7 +11,7 @@ class SaveDatabaseRequest(BaseModel):
 class SearchSiteRequest(BaseModel):
     websites: List[int] = Field(default=[0])
     searchTerms: str = Field(default="MSI")
-    limit: int = Field(default=1, ge=1, le=100)
+    limit: int = Field(default=1, ge=1, le=15)
     day_from: int = Field(default=1, ge=1, le=31)
     month_from: int = Field(default=1, ge=1, le=12)
     year_from: int = Field(default=2025)
@@ -24,7 +24,7 @@ class SearchSiteRequest(BaseModel):
 class SearchDatabaseRequest(BaseModel):
     websites: List[str] = Field(default=["Tom's Hardware"])
     searchTerms: str = Field(default="MSI")
-    limit: int = Field(default=0)
+    limit: int = Field(default=10, ge=1, le=50)
     keywords: Optional[str] = ""
     urls: Optional[str] = ""
     day_from: int = 0

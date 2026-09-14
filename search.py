@@ -1,14 +1,64 @@
 import requests 
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
+import socket
+import ipaddress
+from functools import lru_cache
 
 from collections import defaultdict
-
 import re
-
 from datetime import datetime
 from zoneinfo import ZoneInfo
-import base64
+
+@lru_cache(maxsize=512)
+def _is_safe_hostname(hostname: str) -> bool:
+    """
+    Resolves hostname and checks if any associated IP is loopback,
+    link-local, private, multicast, reserved, or unspecified.
+    Cached via LRU to prevent repetitive DNS lookups during batch scraping.
+    """
+    try:
+        lower_host = hostname.lower().strip()
+        if lower_host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return False
+
+        addr_info = socket.getaddrinfo(hostname, None)
+        for entry in addr_info:
+            ip_str = entry[4][0]
+            ip = ipaddress.ip_address(ip_str)
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_multicast
+                or ip.is_reserved
+                or ip.is_unspecified
+            ):
+                return False
+        return True
+    except Exception:
+        return False
+
+def is_safe_external_url(url: str) -> bool:
+    """
+    Validates that a URL uses http/https and its hostname does not resolve
+    to loopback, link-local, private, multicast, or reserved IP address ranges (preventing SSRF).
+    """
+    if not url or not isinstance(url, str):
+        return False
+    try:
+        parsed = urlparse(url.strip())
+        if parsed.scheme not in ("http", "https"):
+            return False
+
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        return _is_safe_hostname(hostname)
+    except Exception:
+        return False
+
 
 def extract_link_preview_metadata(soup, url):
     """
@@ -222,7 +272,13 @@ def search_toms_hardware(website_url=website_urls[0], search_terms=search_terms,
                   "sortBy": "relevance"
                   }
 
-        response = requests.get(website_url, params=params, headers=headers)
+        if not is_safe_external_url(website_url):
+            continue
+
+        try:
+            response = requests.get(website_url, params=params, headers=headers, timeout=10)
+        except requests.RequestException:
+            continue
         # print(search_terms[term])
         # print("Search URL:", response.url)
     
@@ -249,14 +305,20 @@ def search_toms_hardware(website_url=website_urls[0], search_terms=search_terms,
 
                 if i < article_limit:
                     current_article_text = ""
-                    author = article.find("span", style ="white-space:nowrap").get_text(strip=True)
+                    author_span = article.find("span", style ="white-space:nowrap")
+                    author = author_span.get_text(strip=True) if author_span else "Staff"
                     a_tag = article.find("a", class_="article-link")
-                    link = a_tag.get("href")
+                    if not a_tag or not a_tag.get("href"):
+                        continue
+                    link = urljoin(website_url, a_tag.get("href"))
+                    if not is_safe_external_url(link):
+                        continue
                     title = a_tag.get("aria-label")
-                    publish_date = article.find("time", class_="date-with-prefix").get_text(strip=True)
+                    publish_date_elem = article.find("time", class_="date-with-prefix")
+                    publish_date = publish_date_elem.get_text(strip=True) if publish_date_elem else ""
                     parsed_date = splitter.split(publish_date)
 
-                    if parsed_date[-1] != 'ago': 
+                    if parsed_date and parsed_date[-1] != 'ago': 
                         m_day = int(parsed_date[0])
                         m_month = months[parsed_date[1].lower()]
                         raw_year = parsed_date[-1]
@@ -264,7 +326,10 @@ def search_toms_hardware(website_url=website_urls[0], search_terms=search_terms,
                         if not is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
                             continue
                     
-                    response = requests.get(link, headers=headers)
+                    try:
+                        response = requests.get(link, headers=headers, timeout=10)
+                    except requests.RequestException:
+                        continue
                     # print(link)
                     if response.status_code == 200:
                         opened_article = BeautifulSoup(response.text, "html.parser")
@@ -315,7 +380,13 @@ def search_pc_mag(website_url=website_urls[1], search_terms=search_terms, articl
         i = 0
         params = {"query": search_terms[term]}
 
-        response = requests.get(website_url, params=params, headers=headers)
+        if not is_safe_external_url(website_url):
+            continue
+
+        try:
+            response = requests.get(website_url, params=params, headers=headers, timeout=10)
+        except requests.RequestException:
+            continue
         #print("Search URL:", response.url)
     
         if response.status_code == 200:
@@ -342,7 +413,11 @@ def search_pc_mag(website_url=website_urls[1], search_terms=search_terms, articl
                 if i < article_limit:
                     # get the link tag <a>
                     a_tag = article.find("a", attrs={"x-track-ga-click": True})
-                    link = "https://www.pcmag.com/"+a_tag.get("href")
+                    if not a_tag or not a_tag.get("href"):
+                        continue
+                    link = urljoin("https://www.pcmag.com/", a_tag.get("href"))
+                    if not is_safe_external_url(link):
+                        continue
                     title = a_tag.get_text(strip=True)
                     publish_date = article.find("span", attrs={"data-content-published-date": True}).get_text(strip=True)
                     parsed_date = splitter.split(publish_date)
@@ -364,7 +439,10 @@ def search_pc_mag(website_url=website_urls[1], search_terms=search_terms, articl
                         author = "".join(author_names)
 
                     current_article_text = ""
-                    response = requests.get(link, headers=headers)
+                    try:
+                        response = requests.get(link, headers=headers, timeout=10)
+                    except requests.RequestException:
+                        continue
                     if response.status_code == 200:
                         opened_article = BeautifulSoup(response.text, "html.parser")
                         article_body = opened_article.find("article")
@@ -408,7 +486,13 @@ def search_the_pc_enthusiast(website_url=website_urls[2], search_terms=search_te
         i = 0
         params = {"s": search_terms[term]}
 
-        response = requests.get(website_url, params=params, headers=headers)
+        if not is_safe_external_url(website_url):
+            continue
+
+        try:
+            response = requests.get(website_url, params=params, headers=headers, timeout=10)
+        except requests.RequestException:
+            continue
         #print("Search URL:", response.url)
     
         if response.status_code == 200:
@@ -437,21 +521,28 @@ def search_the_pc_enthusiast(website_url=website_urls[2], search_terms=search_te
                     author_elem = article.find("span", class_="author-name") or article.find("span", class_="author") or article.find("a", rel="author")
                     author = author_elem.get_text(strip=True) if author_elem else "Staff"
                     a_tag = article.find("a", rel="bookmark") or article.find("h2").find("a") if article.find("h2") else article.find("a")
-                    link = a_tag.get("href")
+                    if not a_tag or not a_tag.get("href"):
+                        continue
+                    link = urljoin(website_url, a_tag.get("href"))
+                    if not is_safe_external_url(link):
+                        continue
                     title = a_tag.get_text(strip=True)
                     time_elem = article.find("time", class_="published") or article.find("time")
                     publish_date = time_elem.get_text(strip=True) if time_elem else "Jan 1, 2025"
                     raw_tokens = splitter.split(publish_date)
                     parsed_date = [p for p in raw_tokens if p.lower().rstrip(',') not in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']]
 
-                    if parsed_date[-1] != 'ago': 
+                    if parsed_date and parsed_date[-1] != 'ago': 
                         m_day = int(parsed_date[1])
                         m_month = months[parsed_date[0].lower()]
                         m_year = int(parsed_date[-1])
                         if not is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
                             continue
                     current_article_text = ""
-                    response = requests.get(link, headers=headers)
+                    try:
+                        response = requests.get(link, headers=headers, timeout=10)
+                    except requests.RequestException:
+                        continue
                     if response.status_code == 200:
                         opened_article = BeautifulSoup(response.text, "html.parser")
                         article_body = opened_article.find("div", class_="entry-content")
@@ -495,7 +586,13 @@ def search_hothardware(website_url=website_urls[3], search_terms=search_terms, a
         params = {"a": "all",
                   "s": search_terms[term]}
 
-        response = requests.get(website_url, params=params, headers=headers)
+        if not is_safe_external_url(website_url):
+            continue
+
+        try:
+            response = requests.get(website_url, params=params, headers=headers, timeout=10)
+        except requests.RequestException:
+            continue
         #print("Search URL:", response.url)
     
         if response.status_code == 200:
@@ -519,11 +616,16 @@ def search_hothardware(website_url=website_urls[3], search_terms=search_terms, a
                 m_month = month
                 m_year = year
                 if i < article_limit:
-                    author = article.find("div", class_="cli-byline").get_text(strip=True).split('-')[0].strip()[3:]
+                    author_div = article.find("div", class_="cli-byline")
+                    author = author_div.get_text(strip=True).split('-')[0].strip()[3:] if author_div else "HotHardware Staff"
                     title_link_tag = article.find("a", class_="black p-name u-url")
-                    link = "https://hothardware.com" + title_link_tag.get("href")
+                    if not title_link_tag or not title_link_tag.get("href"):
+                        continue
+                    link = urljoin("https://hothardware.com", title_link_tag.get("href"))
+                    if not is_safe_external_url(link):
+                        continue
                     title = title_link_tag.get_text(strip=True)
-                    publish_date = article.find("div", class_="cli-byline").get_text(strip=True).split('-')[-1].strip()
+                    publish_date = author_div.get_text(strip=True).split('-')[-1].strip() if author_div else "May 1, 2025"
                     raw_tokens = splitter.split(publish_date)
                     parsed_date = [p for p in raw_tokens if p.lower().rstrip(',') not in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']]
                     if parsed_date and parsed_date[-1] != 'ago': 
@@ -533,7 +635,10 @@ def search_hothardware(website_url=website_urls[3], search_terms=search_terms, a
                         if not is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
                             continue
                     current_article_text = ""
-                    response = requests.get(link, headers=headers)
+                    try:
+                        response = requests.get(link, headers=headers, timeout=10)
+                    except requests.RequestException:
+                        continue
                     if response.status_code == 200:
                         opened_article = BeautifulSoup(response.text, "html.parser")
                         current_article_text = opened_article.find("div", class_="cn-body e-content").get_text(strip=True)
@@ -573,7 +678,13 @@ def search_pc_perspective(website_url=website_urls[4], search_terms=search_terms
         i = 0
         params = {"s": search_terms[term]}
 
-        response = requests.get(website_url, params=params, headers=headers)
+        if not is_safe_external_url(website_url):
+            continue
+
+        try:
+            response = requests.get(website_url, params=params, headers=headers, timeout=10)
+        except requests.RequestException:
+            continue
         #print("Search URL:", response.url)
     
         if response.status_code == 200:
@@ -598,13 +709,19 @@ def search_pc_perspective(website_url=website_urls[4], search_terms=search_terms
                 m_year = year
                 if i < article_limit:
                     # get the link tag <a>
-                    author = article.find("a", rel="author").get_text(strip=True)
+                    author_elem = article.find("a", rel="author")
+                    author = author_elem.get_text(strip=True) if author_elem else "PCPer Staff"
                     a_tag = article.find("a", class_="et-accent-color")
-                    link = a_tag.get("href")
+                    if not a_tag or not a_tag.get("href"):
+                        continue
+                    link = urljoin(website_url, a_tag.get("href"))
+                    if not is_safe_external_url(link):
+                        continue
                     title = a_tag.get_text(strip=True)
-                    publish_date = article.find("span", class_="updated").get_text(strip=True)
+                    date_elem = article.find("span", class_="updated")
+                    publish_date = date_elem.get_text(strip=True) if date_elem else "May 1, 2025"
                     parsed_date = splitter.split(publish_date)
-                    if parsed_date[-1] != 'ago': 
+                    if parsed_date and parsed_date[-1] != 'ago': 
                         m_day = int(parsed_date[1])
                         m_month = months[parsed_date[0].lower()]
                         m_year = int(parsed_date[-1])
@@ -612,7 +729,10 @@ def search_pc_perspective(website_url=website_urls[4], search_terms=search_terms
                             continue
 
                     current_article_text = ""
-                    response = requests.get(link, headers=headers)
+                    try:
+                        response = requests.get(link, headers=headers, timeout=10)
+                    except requests.RequestException:
+                        continue
                     if response.status_code == 200:
                         opened_article = BeautifulSoup(response.text, "html.parser")
                         article_body = opened_article.find("div", class_="et-l et-l--post")
@@ -655,7 +775,13 @@ def search_gamerant(website_url=website_urls[5], search_terms=search_terms, arti
         i = 0
         params = {"q": search_terms[term]}
 
-        response = requests.get(website_url, params=params, headers=headers)
+        if not is_safe_external_url(website_url):
+            continue
+
+        try:
+            response = requests.get(website_url, params=params, headers=headers, timeout=10)
+        except requests.RequestException:
+            continue
         # print("Search URL:", response.url)
     
         if response.status_code == 200:
@@ -697,6 +823,9 @@ def search_gamerant(website_url=website_urls[5], search_terms=search_terms, arti
                         a_tag = article.find("a", href=True)
                         link = urljoin("https://gamerant.com", a_tag.get("href", "")) if a_tag else ""
                     
+                    if not link or not is_safe_external_url(link):
+                        continue
+
                     author_tag = article.find("a", class_="article-author") or article.find("a", rel="author") or article.find("span", class_="author")
                     author = author_tag.get_text(strip=True) if author_tag else "GameRant Staff"
                     
@@ -737,7 +866,10 @@ def search_gamerant(website_url=website_urls[5], search_terms=search_terms, arti
                     #     m_year = int(parsed_date[-1])
 
                     current_article_text = ""
-                    response = requests.get(link, headers=headers)
+                    try:
+                        response = requests.get(link, headers=headers, timeout=10)
+                    except requests.RequestException:
+                        continue
                     if response.status_code == 200:
                         opened_article = BeautifulSoup(response.text, "html.parser")
                         article_body = opened_article.find("div", class_="content-block-regular")
@@ -781,7 +913,13 @@ def search_windows_central(website_url=website_urls[6], search_terms=search_term
         params = {"searchTerm": search_terms[term],
                   "dateRange": "DATE_RANGE_12_MONTHS"}
 
-        response = requests.get(website_url, params=params, headers=headers)
+        if not is_safe_external_url(website_url):
+            continue
+
+        try:
+            response = requests.get(website_url, params=params, headers=headers, timeout=10)
+        except requests.RequestException:
+            continue
         #print("Search URL:", response.url)
     
         if response.status_code == 200:
@@ -805,14 +943,22 @@ def search_windows_central(website_url=website_urls[6], search_terms=search_term
                 m_month = month
                 m_year = year
                 if i < article_limit:
-                # get the link tag <a>
-                    author = article.find("span", style="white-space:nowrap").get_text(strip=True)
-                    link = article.find("a", class_="article-link").get("href")
-                    title = article.find("h3", class_="article-name").get_text(strip=True)
-                    publish_date = article.find("time", class_="no-wrap relative-date date-with-prefix").get_text(strip=True)
+                    # get the link tag <a>
+                    author_span = article.find("span", style="white-space:nowrap")
+                    author = author_span.get_text(strip=True) if author_span else "Windows Central Staff"
+                    a_tag = article.find("a", class_="article-link")
+                    if not a_tag or not a_tag.get("href"):
+                        continue
+                    link = urljoin(website_url, a_tag.get("href"))
+                    if not is_safe_external_url(link):
+                        continue
+                    title_elem = article.find("h3", class_="article-name")
+                    title = title_elem.get_text(strip=True) if title_elem else "Windows Central Article"
+                    date_elem = article.find("time", class_="no-wrap relative-date date-with-prefix")
+                    publish_date = date_elem.get_text(strip=True) if date_elem else "1 May 25"
                     parsed_date = splitter.split(publish_date)
 
-                    if parsed_date[-1] != 'ago': 
+                    if parsed_date and parsed_date[-1] != 'ago': 
                         m_day = int(parsed_date[0])
                         m_month = months[parsed_date[1].lower()]
                         raw_year = parsed_date[-1]
@@ -821,7 +967,10 @@ def search_windows_central(website_url=website_urls[6], search_terms=search_term
                             continue
 
                     current_article_text = ""   
-                    response = requests.get(link, headers=headers)
+                    try:
+                        response = requests.get(link, headers=headers, timeout=10)
+                    except requests.RequestException:
+                        continue
                     if response.status_code == 200:
                         opened_article = BeautifulSoup(response.text, "html.parser")
                         article_body = opened_article.find("div", id="article-body")
@@ -864,7 +1013,13 @@ def search_tech_radar(website_url=website_urls[7], search_terms=search_terms, ar
         i = 0
         params = {"searchTerm": search_terms[term]}
 
-        response = requests.get(website_url, params=params, headers=headers)
+        if not is_safe_external_url(website_url):
+            continue
+
+        try:
+            response = requests.get(website_url, params=params, headers=headers, timeout=10)
+        except requests.RequestException:
+            continue
         #print("Search URL:", response.url)
     
         if response.status_code == 200:
@@ -889,13 +1044,21 @@ def search_tech_radar(website_url=website_urls[7], search_terms=search_terms, ar
                 m_year = year
                 if i < article_limit:
                     # get the link tag <a>
-                    author = article.find("span", style="white-space:nowrap").get_text(strip=True)
-                    link = article.find("a", class_="article-link").get("href")
-                    title = article.find("h3", class_="article-name").get_text(strip=True)
-                    publish_date = article.find("time", class_="no-wrap relative-date date-with-prefix").get_text(strip=True)
+                    author_span = article.find("span", style="white-space:nowrap")
+                    author = author_span.get_text(strip=True) if author_span else "TechRadar Staff"
+                    a_tag = article.find("a", class_="article-link")
+                    if not a_tag or not a_tag.get("href"):
+                        continue
+                    link = urljoin(website_url, a_tag.get("href"))
+                    if not is_safe_external_url(link):
+                        continue
+                    title_elem = article.find("h3", class_="article-name")
+                    title = title_elem.get_text(strip=True) if title_elem else "TechRadar Article"
+                    date_elem = article.find("time", class_="no-wrap relative-date date-with-prefix")
+                    publish_date = date_elem.get_text(strip=True) if date_elem else "1 May 25"
                     parsed_date = splitter.split(publish_date)
 
-                    if parsed_date[-1] != 'ago': 
+                    if parsed_date and parsed_date[-1] != 'ago': 
                         m_day = int(parsed_date[0])
                         m_month = months[parsed_date[1].lower()]
                         raw_year = parsed_date[-1]
@@ -903,7 +1066,10 @@ def search_tech_radar(website_url=website_urls[7], search_terms=search_terms, ar
                         if not is_article_in_date_range(m_year, m_month, m_day, year_from, month_from, day_from, year_to, month_to, day_to):
                             continue
                     current_article_text = ""
-                    response = requests.get(link, headers=headers)
+                    try:
+                        response = requests.get(link, headers=headers, timeout=10)
+                    except requests.RequestException:
+                        continue
                     if response.status_code == 200:
                         opened_article = BeautifulSoup(response.text, "html.parser")
                         article_body = opened_article.find("div", id="article-body") or opened_article.find("article") or opened_article

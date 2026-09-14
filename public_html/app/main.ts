@@ -1,6 +1,6 @@
 const now = new Date();
 const n_year = now.getFullYear();
-const n_month = now.getMonth()+1;
+const n_month = now.getMonth() + 1;
 const n_day = now.getDate();
 
 // TypeScript interfaces for type safety
@@ -38,10 +38,34 @@ interface ApiResponse {
     html: string;
 }
 
-// API Configuration
-const API_BASE_URL = 'https://www.summarizer.howard1218.site/api';
+interface SearchMetadata {
+    query: string;
+    sites: string[];
+    durationSec: number;
+}
 
-// const API_BASE_URL = 'http://127.0.0.1:5000/api'
+// Global declaration for DOMPurify loaded via CDN script
+declare const DOMPurify: {
+    sanitize(dirty: string, config?: any): string;
+} | undefined;
+
+function sanitizeHtml(dirty: string): string {
+    if (typeof DOMPurify !== "undefined" && DOMPurify && typeof DOMPurify.sanitize === "function") {
+        return DOMPurify.sanitize(dirty, {
+            ADD_TAGS: ["input"],
+            ADD_ATTR: ["target", "value", "name", "type", "checked", "style", "loading", "rel"],
+        });
+    }
+    return dirty;
+}
+
+// API Configuration
+const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+const API_BASE_URL = isLocal
+      ? 'http://127.0.0.1:5000/api'
+      : '/api';
+      
 async function makeApiRequest_recent(endpoint: string): Promise<ApiResponse> {
     const url = `${API_BASE_URL}${endpoint}`;
     console.log(url)
@@ -253,56 +277,185 @@ async function makeApiRequestDatabase(endpoint: string, data: SearchValuesDataba
     }
 }
 
-// Function to display results in the activity log
-function displayResults(response: ApiResponse): void {
+function scrollToArticlesCard(): void {
     const articlesCard = document.getElementById('articles-card');
-    const article_search_result = document.getElementById('article-search-status')
+    if (!articlesCard) return;
+    const nav = document.querySelector('.app-nav') as HTMLElement | null;
+    const navHeight = nav ? nav.getBoundingClientRect().height : 60;
+    const cardTop = articlesCard.getBoundingClientRect().top + window.pageYOffset;
+    window.scrollTo({
+        top: Math.max(0, cardTop - navHeight - 20),
+        behavior: 'smooth'
+    });
+}
+
+function getCheckedSiteLabels(inputName: string): string[] {
+    const checkboxes = document.querySelectorAll(`input[name="${inputName}"]:checked`) as NodeListOf<HTMLInputElement>;
+    const names: string[] = [];
+    checkboxes.forEach(cb => {
+        const label = document.querySelector(`label[for="${cb.id}"]`);
+        const text = label?.textContent?.trim();
+        if (text && text !== "Select All") {
+            names.push(text);
+        }
+    });
+    return names.length > 0 ? names : ["Selected Sources"];
+}
+
+function extractSitesFromElement(container: Element | DocumentFragment): string[] {
+    const sites = new Set<string>();
+    
+    // Check modern preview card site badges
+    container.querySelectorAll(".link-preview-site").forEach(el => {
+        const text = el.textContent?.trim();
+        if (text) sites.add(text);
+    });
+
+    // Fallback: Check metadata table rows for "Website"
+    container.querySelectorAll("tr").forEach(row => {
+        const thText = row.querySelector("th")?.textContent?.trim().toLowerCase();
+        const tdText = row.querySelector("td")?.textContent?.trim();
+        if (thText === "website" && tdText) {
+            sites.add(tdText);
+        }
+    });
+
+    return Array.from(sites);
+}
+
+function extractSitesFromArticlesHtml(html: string): string[] {
+    const temp = document.createElement("div");
+    temp.innerHTML = sanitizeHtml(html);
+    return extractSitesFromElement(temp);
+}
+
+function extractSitesFromActivityLog(): string[] {
+    const activityLog = document.getElementById('activity-log');
+    if (!activityLog) return [];
+    return extractSitesFromElement(activityLog);
+}
+
+function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function createSearchMetadataBarHtml(metadata: SearchMetadata): string {
+    const sites = metadata.sites && metadata.sites.length > 0 ? metadata.sites : ["Selected Sources"];
+    const sitesHtml = sites
+        .map(site => `<span class="metadata-badge">${escapeHtml(site)}</span>`)
+        .join('');
+
+    const durationText = metadata.durationSec && metadata.durationSec > 0
+        ? `Completed in ${metadata.durationSec.toFixed(1)}s`
+        : `Loaded from storage`;
+
+    return `
+        <div class="search-metadata-bar">
+          <div class="metadata-bar-left">
+            <div class="metadata-site-badges">
+              ${sitesHtml}
+            </div>
+            <span class="metadata-query-term">Query: "${escapeHtml(metadata.query || 'Articles')}"</span>
+          </div>
+          <div class="metadata-bar-right">
+            <span class="metadata-duration">${durationText}</span>
+          </div>
+        </div>
+    `;
+}
+
+function syncSavedArticlesToLocalStorage(): void {
+    const activityLog = document.getElementById("activity-log");
+    if (!activityLog) return;
+    const groups = activityLog.querySelectorAll(".search-output-group");
+    const saved: string[] = [];
+    groups.forEach(g => {
+        saved.push(g.outerHTML);
+    });
+    if (groups.length === 0) {
+        const loose = activityLog.querySelectorAll(".article-container");
+        loose.forEach(a => saved.push(a.outerHTML));
+    }
+    if (saved.length > 0) {
+        localStorage.setItem("savedArticles", JSON.stringify(saved));
+    } else {
+        localStorage.removeItem("savedArticles");
+    }
+}
+
+// Function to display results in the activity log
+function displayResults(response: ApiResponse, metadata?: SearchMetadata): void {
+    const articlesCard = document.getElementById('articles-card');
+    const article_search_result = document.getElementById('article-search-status');
+    const activityLog = document.getElementById('activity-log');
+
     if (response.html === "" && article_search_result) {
         setTimeout(() => {
-            articlesCard?.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'start' 
-        });
-    }, 100); // Small delay to ensure the content is rendered
+            scrollToArticlesCard();
+        }, 100); // Small delay to ensure the content is rendered
         article_search_result.textContent = 'No Articles Found';
         return;
     }
-    saveToLocalStorage(response.html);
-    const stored = localStorage.getItem("savedArticles");
-    if (!stored) return;
 
-    const activityLog = document.getElementById('activity-log');
     if (!activityLog || !articlesCard) return;
     
     // Show the articles card
     articlesCard.style.display = 'block';
     
-    const isFirstResult = activityLog.children.length === 0;
+    const isFirstResult = activityLog.querySelectorAll(".article-container").length === 0;
     if (isFirstResult) {
         const saveButtonTextContent = document.getElementById("saveArticlesBtn") as HTMLButtonElement;
         const emailButtonTextContent = document.getElementById("emailArticlesBtn") as HTMLButtonElement;
         const saveToFileBtn = document.getElementById("saveToFileBtn") as HTMLButtonElement;
         const clearArticlesBtn = document.getElementById('clearArticlesBtn') as HTMLButtonElement;
 
-        saveButtonTextContent.style.display = "inline-block";
-        emailButtonTextContent.style.display = "inline-block";
-        saveToFileBtn.style.display = "inline-block";
-        clearArticlesBtn.style.display = "inline-block";
+        if (saveButtonTextContent) saveButtonTextContent.style.display = "inline-block";
+        if (emailButtonTextContent) emailButtonTextContent.style.display = "inline-block";
+        if (saveToFileBtn) saveToFileBtn.style.display = "inline-block";
+        if (clearArticlesBtn) clearArticlesBtn.style.display = "inline-block";
     }
     
+    const sanitizedHtml = sanitizeHtml(response.html);
     const temp = document.createElement("div");
-    temp.innerHTML = response.html;
+    temp.innerHTML = sanitizedHtml;
 
-    temp.querySelectorAll(".article-container").forEach(el => {
-        activityLog.insertAdjacentHTML('afterbegin', el.outerHTML);
+    const renderedArticles = temp.querySelectorAll(".article-container");
+    if (renderedArticles.length === 0) return;
+
+    let metaToUse = metadata;
+    if (!metaToUse) {
+        const sites = extractSitesFromArticlesHtml(sanitizedHtml);
+        metaToUse = {
+            query: "Saved Articles",
+            sites: sites.length > 0 ? sites : ["Saved Sources"],
+            durationSec: 0
+        };
+    }
+
+    // Create a dedicated search output group enclosing this search's navbar and cards
+    const searchGroup = document.createElement("div");
+    searchGroup.className = "search-output-group";
+
+    const navbarHtml = createSearchMetadataBarHtml(metaToUse);
+    let articlesHtml = "";
+    renderedArticles.forEach(el => {
+        articlesHtml += el.outerHTML;
     });
+
+    searchGroup.innerHTML = sanitizeHtml(navbarHtml + articlesHtml);
+    activityLog.insertAdjacentElement('afterbegin', searchGroup);
+
+    // Save all output groups to local storage
+    syncSavedArticlesToLocalStorage();
 
     // Scroll to the Articles Found section with smooth animation
     setTimeout(() => {
-        articlesCard.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'start' 
-        });
+        scrollToArticlesCard();
     }, 100); // Small delay to ensure the content is rendered
     if (article_search_result) {
         article_search_result.textContent = 'Articles Found';
@@ -322,6 +475,8 @@ function displayResultsReload(): void {
         return;
     }
 
+    if (savedArticles.length === 0) return;
+
     const activityLog = document.getElementById('activity-log');
     const articlesCard = document.getElementById('articles-card');
     if (!activityLog || !articlesCard) return;
@@ -329,31 +484,45 @@ function displayResultsReload(): void {
     // Show the articles card
     articlesCard.style.display = 'block';
     
-    // Check if this is the first result - if so, clear the default "No articles found" message
-    const isFirstResult = activityLog.children.length === 0;
-    if (isFirstResult) {
-        const saveButtonTextContent = document.getElementById("saveArticlesBtn") as HTMLButtonElement;
-        const emailButtonTextContent = document.getElementById("emailArticlesBtn") as HTMLButtonElement;
-        const saveToFileBtn = document.getElementById("saveToFileBtn") as HTMLButtonElement;
-        const clearArticlesBtn = document.getElementById('clearArticlesBtn') as HTMLButtonElement;
+    const saveButtonTextContent = document.getElementById("saveArticlesBtn") as HTMLButtonElement;
+    const emailButtonTextContent = document.getElementById("emailArticlesBtn") as HTMLButtonElement;
+    const saveToFileBtn = document.getElementById("saveToFileBtn") as HTMLButtonElement;
+    const clearArticlesBtn = document.getElementById('clearArticlesBtn') as HTMLButtonElement;
 
-        saveButtonTextContent.style.display = "inline-block";
-        emailButtonTextContent.style.display = "inline-block";
-        saveToFileBtn.style.display = "inline-block";
-        clearArticlesBtn.style.display = "inline-block";
-    }
+    if (saveButtonTextContent) saveButtonTextContent.style.display = "inline-block";
+    if (emailButtonTextContent) emailButtonTextContent.style.display = "inline-block";
+    if (saveToFileBtn) saveToFileBtn.style.display = "inline-block";
+    if (clearArticlesBtn) clearArticlesBtn.style.display = "inline-block";
     
-    // Append new result (don't clear existing content)
-    savedArticles.forEach(articleHTML => {
-        activityLog.insertAdjacentHTML('beforeend', articleHTML);
-    })
+    // Append each saved search-output-group (or wrap loose legacy articles)
+    savedArticles.forEach(itemHTML => {
+        const cleanItemHtml = sanitizeHtml(itemHTML.trim());
+        const temp = document.createElement("div");
+        temp.innerHTML = cleanItemHtml;
+        
+        const firstEl = temp.firstElementChild;
+        if (firstEl?.classList.contains("search-output-group")) {
+            activityLog.insertAdjacentHTML('beforeend', cleanItemHtml);
+        } else if (temp.querySelector(".article-container")) {
+            // Legacy loose article container: wrap in a search-output-group with its own navbar
+            const sites = extractSitesFromArticlesHtml(cleanItemHtml);
+            const navbarHtml = createSearchMetadataBarHtml({
+                query: "Saved Articles",
+                sites: sites.length > 0 ? sites : ["Saved Sources"],
+                durationSec: 0
+            });
+            const groupHtml = `<div class="search-output-group">${navbarHtml}${cleanItemHtml}</div>`;
+            activityLog.insertAdjacentHTML('beforeend', sanitizeHtml(groupHtml));
+        } else {
+            activityLog.insertAdjacentHTML('beforeend', cleanItemHtml);
+        }
+    });
+
+    syncSavedArticlesToLocalStorage();
 
     // Scroll to the Articles Found section with smooth animation
     setTimeout(() => {
-        articlesCard.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'start' 
-        });
+        scrollToArticlesCard();
     }, 100); // Small delay to ensure the content is rendered
 }
 // function to get unchecked articles
@@ -394,32 +563,21 @@ function clearCheckboxes(): void {
 
 function clearArticles(): void {
     const container = document.getElementById("activity-log");
-    const stored = localStorage.getItem("savedArticles");
     if (!container) return;
-
-    let savedArticles: string[] = [];
-    if (stored) {
-        savedArticles = JSON.parse(stored);
-    }
     
     const sections = container.querySelectorAll(".article-container");
-    let updatedArticles: string[] = [];
-
-    let currentArticleIndex = 0
     sections.forEach(section => {
-    const checkbox = section.querySelector('input[name="articleCheckBox"]') as HTMLInputElement | null;
-    if (checkbox?.checked) {
-
-        (section as HTMLElement).remove();
-
-        // savedArticles = savedArticles.filter(html => !html.includes(section.outerHTML));
-    } else {
-        updatedArticles.push(savedArticles[currentArticleIndex])
-    }
-    currentArticleIndex++;
+        const checkbox = section.querySelector('input[name="articleCheckBox"]') as HTMLInputElement | null;
+        if (checkbox?.checked) {
+            const group = section.closest('.search-output-group');
+            section.remove();
+            if (group && group.querySelectorAll('.article-container').length === 0) {
+                group.remove();
+            }
+        }
     });
-    localStorage.setItem("savedArticles", JSON.stringify(updatedArticles));
-    return;
+    
+    syncSavedArticlesToLocalStorage();
 }
 
 // Function to get values from "Search a site" form
@@ -484,27 +642,22 @@ function hideModal(): void {
     modal.classList.remove("show");
 }
 
-// save to local storage 
-function saveToLocalStorage(newHMTL: string) {
-    const temp = document.createElement("div");
-    temp.innerHTML = newHMTL;
-
-    const newArticles: string[] = [];
-    temp.querySelectorAll(".article-container").forEach(el => {
-        newArticles.unshift(el.outerHTML);
-    });
-
-    const stored = localStorage.getItem("savedArticles");
-    let savedArticles: string[] = [];
-
-    if (stored) {
-        savedArticles = JSON.parse(stored);
+function showErrorModal(message: string): void {
+    const errorModal = document.getElementById("errorModal") as HTMLDivElement;
+    const errorText = document.getElementById("errorMessageText") as HTMLParagraphElement;
+    if (errorModal && errorText) {
+        errorText.textContent = message;
+        errorModal.classList.remove("hidden");
+        errorModal.classList.add("show");
     }
+}
 
-    // append saved articles to new articles 
-    newArticles.push(...savedArticles);
-    localStorage.setItem("savedArticles", JSON.stringify(newArticles));
-
+function hideErrorModal(): void {
+    const errorModal = document.getElementById("errorModal") as HTMLDivElement;
+    if (errorModal) {
+        errorModal.classList.remove("show");
+        errorModal.classList.add("hidden");
+    }
 }
 
 // DOM Content Loaded event handler
@@ -572,20 +725,19 @@ document.addEventListener('DOMContentLoaded', function(): void {
     initSingleSelectDropdown('database-year-to-btn', 'database-year-to-content', 'database-year-to-text', 'database-year-to');
 
     const btn = document.getElementById("backToTopBtn");
-    const targetSection = document.getElementById("articles-card");
     if (btn) {
-        // Show button when scrolling down
+        // Show button when scrolling down past 300px
         window.addEventListener("scroll", () => {
-            if (window.scrollY >1200) {
-                btn.style.display = "block";
+            if (window.scrollY > 300) {
+                btn.classList.add("visible");
             } else {
-                btn.style.display = "none";
+                btn.classList.remove("visible");
             }
         });
 
-        // Scroll to top on click
+        // Scroll cleanly to the very top on click
         btn.addEventListener("click", () => {
-            targetSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+            window.scrollTo({ top: 0, behavior: "smooth" });
         });
     }
 
@@ -827,23 +979,32 @@ document.addEventListener('DOMContentLoaded', function(): void {
             const articleCheckboxes: string[] = getCheckedArticles();
             
             if (activityLog && articlesCard) {
-                const children = activityLog.querySelectorAll(".article-container");
                 if (articleCheckboxes.length == 0) {
-                    children.forEach(child => child.remove());
-                    localStorage.clear();
-                    saveButtonTextContent.style.display = "none";
-                    emailButtonTextContent.style.display = "none";
-                    saveToFileBtn.style.display = "none";
+                    activityLog.textContent = '';
+                    localStorage.removeItem("savedArticles");
+                    localStorage.removeItem("searchMetadata");
+                    if (saveButtonTextContent) saveButtonTextContent.style.display = "none";
+                    if (emailButtonTextContent) emailButtonTextContent.style.display = "none";
+                    if (saveToFileBtn) saveToFileBtn.style.display = "none";
                     clearArticlesBtn.style.display = "none";
                 } else {
                     clearArticles();
                     clearCheckboxes();
                     // Restore button state
                     clearButtonTextContent.textContent = "Clear All";
-                    saveButtonTextContent.textContent = "Save All";
-                    emailButtonTextContent.textContent = "Email All";
-                    saveToFileBtn.textContent = "Save to File";
-                    clearSelectionsButton.style.display = "none";
+                    if (saveButtonTextContent) saveButtonTextContent.textContent = "Save All";
+                    if (emailButtonTextContent) emailButtonTextContent.textContent = "Email All";
+                    if (saveToFileBtn) saveToFileBtn.textContent = "Save to File";
+                    if (clearSelectionsButton) clearSelectionsButton.style.display = "none";
+                    if (activityLog.querySelectorAll(".article-container").length === 0) {
+                        activityLog.textContent = '';
+                        localStorage.removeItem("savedArticles");
+                        localStorage.removeItem("searchMetadata");
+                        if (saveButtonTextContent) saveButtonTextContent.style.display = "none";
+                        if (emailButtonTextContent) emailButtonTextContent.style.display = "none";
+                        if (saveToFileBtn) saveToFileBtn.style.display = "none";
+                        clearArticlesBtn.style.display = "none";
+                    }
                 }
             }
         });
@@ -906,12 +1067,26 @@ document.addEventListener('DOMContentLoaded', function(): void {
                 emailArticlesBtn.disabled = false;
             }
         });
-            // Close modal by clicking outside modal-content
+        // Close modal by clicking outside modal-content
         modal.addEventListener("click", (e) => {
             if (e.target === modal) {
                 hideModal();
             }
         });
+        
+        const errorCloseBtn = document.getElementById("errorCloseBtn") as HTMLButtonElement;
+        if (errorCloseBtn) {
+            errorCloseBtn.addEventListener("click", hideErrorModal);
+        }
+        
+        const errorModal = document.getElementById("errorModal") as HTMLDivElement;
+        if (errorModal) {
+            errorModal.addEventListener("click", (e) => {
+                if (e.target === errorModal) {
+                    hideErrorModal();
+                }
+            });
+        }
     }
 
     // Save Articles button functionality
@@ -985,7 +1160,7 @@ document.addEventListener('DOMContentLoaded', function(): void {
                 return;
             }
 
-            // Combine HTML and clean up checkboxes
+            // Combine HTML and clean up checkboxes & legacy inline styles
             let htmlContent = "";
             selectedContainers.forEach(container => {
                 const clone = container.cloneNode(true) as HTMLElement;
@@ -993,189 +1168,270 @@ document.addEventListener('DOMContentLoaded', function(): void {
                 if (checkbox) {
                     checkbox.remove();
                 }
+
+                // Strip legacy inline style on the container so dark card styles apply cleanly
+                clone.removeAttribute('style');
+
+                // Sanitize any inline background and border styles inside the card
+                clone.querySelectorAll<HTMLElement>('*').forEach(el => {
+                    const inlineBg = el.style.backgroundColor;
+                    if (inlineBg && (
+                        inlineBg === 'rgb(249, 249, 249)' ||
+                        inlineBg === '#f9f9f9' ||
+                        inlineBg === 'rgb(255, 255, 255)' ||
+                        inlineBg === '#fff' ||
+                        inlineBg === '#ffffff' ||
+                        inlineBg === 'white'
+                    )) {
+                        el.style.backgroundColor = '';
+                    }
+
+                    const inlineBorder = el.style.borderColor;
+                    if (inlineBorder && (
+                        inlineBorder === 'rgb(221, 221, 221)' ||
+                        inlineBorder === '#ddd' ||
+                        inlineBorder === 'rgb(204, 204, 204)' ||
+                        inlineBorder === '#ccc'
+                    )) {
+                        el.style.borderColor = '';
+                    }
+
+                    if (el.classList.contains('article-analysis')) {
+                        el.style.backgroundColor = 'transparent';
+                        el.style.padding = '0';
+                    }
+                });
+
                 htmlContent += clone.outerHTML + "\n";
             });
 
             // Wrap in standard HTML template for saving
             const fullHtml = `<!DOCTYPE html>
-                <html>
+                <html lang="en">
                 <head>
                     <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
                     <title>Saved Summaries</title>
                     <style>
+                        * {
+                            box-sizing: border-box;
+                        }
+
                         body {
-                            background-color: #09090b;
-                            color: #f4f4f5;
+                            background-color: #09090b !important;
+                            color: #f4f4f5 !important;
                             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                             padding: 2rem;
-                            max-width: 800px;
+                            max-width: 860px;
                             margin: 0 auto;
+                            line-height: 1.5;
                         }
 
                         .article-container {
-                            margin-bottom: 2rem;
-                            padding: 1.75rem;
-                            border: 1px solid #27272a;
-                            border-radius: 8px;
-                            background-color: #18181b;
+                            margin-bottom: 2rem !important;
+                            padding: 1.75rem !important;
+                            border: 1px solid #27272a !important;
+                            border-radius: 8px !important;
+                            background-color: #18181b !important;
+                            color: #f4f4f5 !important;
+                            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+                            position: relative !important;
                         }
 
                         .article-analysis {
-                            font-family: inherit;
+                            font-family: inherit !important;
+                            padding: 0 !important;
+                            background-color: transparent !important;
+                            background: transparent !important;
+                            display: flex !important;
+                            flex-direction: column !important;
+                            gap: 1.5rem !important;
+                        }
+
+                        .article-analysis h2 {
+                            font-size: 1.25rem !important;
+                            font-weight: 600 !important;
+                            color: #f4f4f5 !important;
+                            margin-top: 1.5rem !important;
+                            margin-bottom: 0.75rem !important;
                         }
 
                         /* Table styles inside saved file */
                         table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            margin-bottom: 1.5rem;
-                            background-color: #18181b;
-                            border: 1px solid #27272a;
-                            border-radius: 6px;
-                            overflow: hidden;
+                            width: 100% !important;
+                            border-collapse: collapse !important;
+                            margin-bottom: 1.5rem !important;
+                            background-color: #09090b !important;
+                            border: 1px solid #27272a !important;
+                            border-radius: 6px !important;
+                            overflow: hidden !important;
                         }
 
                         th, td {
-                            border: 1px solid #27272a;
-                            padding: 0.75rem 1rem;
-                            font-size: 0.85rem;
-                            text-align: left;
+                            border: 1px solid #27272a !important;
+                            padding: 0.75rem 1rem !important;
+                            font-size: 0.85rem !important;
+                            text-align: left !important;
                         }
 
                         th {
-                            background-color: rgba(255, 255, 255, 0.02);
-                            color: #a1a1aa;
-                            font-weight: 600;
+                            background-color: rgba(255, 255, 255, 0.02) !important;
+                            color: #a1a1aa !important;
+                            font-weight: 600 !important;
+                            width: 140px !important;
                         }
 
                         td {
-                            color: #f4f4f5;
+                            color: #f4f4f5 !important;
+                        }
+
+                        td a {
+                            color: #f4f4f5 !important;
+                            text-decoration: underline !important;
                         }
 
                         /* Link Preview Card */
                         .link-preview-card {
-                            display: flex;
-                            gap: 1.25rem;
-                            background-color: #09090b;
-                            border: 1px solid #27272a;
-                            border-radius: 6px;
-                            padding: 1.25rem;
-                            margin-top: 0.5rem;
-                            overflow: hidden;
-                            align-items: stretch;
-                            text-align: left;
+                            display: flex !important;
+                            gap: 1.25rem !important;
+                            background-color: #09090b !important;
+                            border: 1px solid #27272a !important;
+                            border-radius: 6px !important;
+                            padding: 1.25rem !important;
+                            margin-top: 0.5rem !important;
+                            overflow: hidden !important;
+                            align-items: stretch !important;
+                            text-align: left !important;
                         }
 
                         .link-preview-details {
-                            flex: 1;
-                            display: flex;
-                            flex-direction: column;
-                            gap: 0.5rem;
-                            justify-content: center;
+                            flex: 1 !important;
+                            display: flex !important;
+                            flex-direction: column !important;
+                            gap: 0.5rem !important;
+                            justify-content: center !important;
                         }
 
                         .link-preview-site {
-                            font-size: 0.75rem;
-                            text-transform: uppercase;
-                            letter-spacing: 0.05em;
-                            color: #a1a1aa;
-                            font-weight: 600;
+                            font-size: 0.75rem !important;
+                            text-transform: uppercase !important;
+                            letter-spacing: 0.05em !important;
+                            color: #a1a1aa !important;
+                            font-weight: 600 !important;
                         }
 
                         .link-preview-title {
-                            font-size: 1.05rem;
-                            font-weight: 600;
-                            color: #f4f4f5;
-                            text-decoration: underline;
-                            line-height: 1.4;
+                            font-size: 1.05rem !important;
+                            font-weight: 600 !important;
+                            color: #f4f4f5 !important;
+                            text-decoration: underline !important;
+                            line-height: 1.4 !important;
                         }
 
                         .link-preview-desc {
-                            font-size: 0.85rem;
-                            color: #a1a1aa;
-                            line-height: 1.5;
-                            margin: 0;
+                            font-size: 0.85rem !important;
+                            color: #a1a1aa !important;
+                            line-height: 1.5 !important;
+                            margin: 0 !important;
                         }
 
                         .link-preview-meta {
-                            display: flex;
-                            align-items: center;
-                            gap: 0.5rem;
-                            font-size: 0.75rem;
-                            color: #a1a1aa;
-                            margin-top: 0.25rem;
+                            display: flex !important;
+                            align-items: center !important;
+                            gap: 0.5rem !important;
+                            font-size: 0.75rem !important;
+                            color: #a1a1aa !important;
+                            margin-top: 0.25rem !important;
                         }
 
                         .link-preview-divider {
-                            color: #3f3f46;
+                            color: #3f3f46 !important;
                         }
 
                         .link-preview-thumbnail {
-                            width: 120px;
-                            min-width: 120px;
-                            height: 90px;
-                            border-radius: 4px;
-                            overflow: hidden;
-                            border: 1px solid #27272a;
-                            align-self: center;
-                            display: flex;
+                            width: 120px !important;
+                            min-width: 120px !important;
+                            height: 90px !important;
+                            border-radius: 4px !important;
+                            overflow: hidden !important;
+                            border: 1px solid #27272a !important;
+                            align-self: center !important;
+                            display: flex !important;
                         }
 
                         .link-preview-thumbnail img {
-                            width: 100%;
-                            height: 100%;
-                            object-fit: cover;
+                            width: 100% !important;
+                            height: 100% !important;
+                            object-fit: cover !important;
+                        }
+
+                        /* Summary Box */
+                        ul.summary-box,
+                        .summary-box,
+                        .article-analysis > ul:not(.sentiment-block ul) {
+                            background-color: #09090b !important;
+                            padding: 1.25rem 1.5rem 1.25rem 2rem !important;
+                            border: 1px solid #27272a !important;
+                            border-radius: 6px !important;
+                            margin-bottom: 1.5rem !important;
+                            color: #f4f4f5 !important;
+                        }
+
+                        li {
+                            margin-bottom: 0.5rem !important;
+                            font-size: 0.9rem !important;
+                            line-height: 1.5 !important;
+                            color: #e4e4e7 !important;
                         }
 
                         /* Sentiment section inside saved file */
                         .sentiment-section {
-                            display: grid;
-                            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                            gap: 1rem;
+                            display: grid !important;
+                            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
+                            gap: 1rem !important;
+                            margin-top: 0.5rem !important;
                         }
 
                         .sentiment-block {
-                            padding: 1rem 1.5rem;
-                            border-radius: 8px;
-                            border: 1px solid #27272a;
-                            background-color: #18181b;
+                            padding: 1.25rem !important;
+                            border-radius: 6px !important;
+                            border: 1px solid #27272a !important;
+                            background-color: #09090b !important;
+                            color: #f4f4f5 !important;
                         }
 
                         .sentiment-block.positive {
-                            border-left: 5px solid #22c55e;
+                            border-left: 4px solid #22c55e !important;
                         }
 
                         .sentiment-block.neutral {
-                            border-left: 5px solid #ef4444;
+                            border-left: 4px solid #ef4444 !important;
                         }
 
                         .sentiment-block.negative {
-                            border-left: 5px solid #71717a;
+                            border-left: 4px solid #71717a !important;
                         }
 
-                        h2 {
-                            font-size: 1.25rem;
-                            margin-top: 1.5rem;
-                            margin-bottom: 0.75rem;
-                            color: #f4f4f5;
+                        .sentiment-block h3 {
+                            font-size: 0.95rem !important;
+                            font-weight: 600 !important;
+                            color: #f4f4f5 !important;
+                            margin-top: 0 !important;
+                            margin-bottom: 0.75rem !important;
                         }
 
-                        h3 {
-                            margin-top: 0;
-                            color: #f4f4f5;
+                        .sentiment-block ul {
+                            background-color: transparent !important;
+                            background: transparent !important;
+                            border: none !important;
+                            padding: 0 0 0 1.25rem !important;
+                            margin: 0 !important;
                         }
 
-                        ul {
-                            background-color: #18181b;
-                            padding: 1rem 1.5rem;
-                            border: 1px solid #27272a;
-                            border-radius: 8px;
-                            margin-bottom: 2rem;
-                            color: #e4e4e7;
-                        }
-
-                        li {
-                            margin-bottom: 0.5rem;
+                        .sentiment-block li {
+                            color: #a1a1aa !important;
+                            font-size: 0.85rem !important;
+                            margin-bottom: 0.5rem !important;
                         }
                     </style>
                 </head>
@@ -1221,6 +1477,10 @@ document.addEventListener('DOMContentLoaded', function(): void {
             submitButton.textContent = 'Searching...';
             submitButton.disabled = true;
 
+            const startTime = performance.now();
+            const selectedSites = getCheckedSiteLabels('websites');
+            const searchTerms = values.searchTerms.trim() || values.keywords.trim() || 'Tech Articles';
+
             try {
                 showSearchProgress();
                 // Make streaming API request to backend
@@ -1229,9 +1489,14 @@ document.addEventListener('DOMContentLoaded', function(): void {
                 });
 
                 if (response.status === 'success') {
-                    displayResults(response);
+                    const durationSec = (performance.now() - startTime) / 1000;
+                    displayResults(response, {
+                        query: searchTerms,
+                        sites: selectedSites,
+                        durationSec: durationSec
+                    });
                 } else {
-                    alert(`Error: ${response.message}`);
+                    showErrorModal(response.message || "An unknown error occurred.");
                 }
             } catch (error) {
                 alert('Search failed. Please try again.');
@@ -1255,10 +1520,17 @@ document.addEventListener('DOMContentLoaded', function(): void {
             recentBtn.textContent = 'Requesting...';
             recentBtn.disabled = true;
 
+            const startTime = performance.now();
             try {
                 const response = await makeApiRequest_recent('/recent-saves');
                 if (response.status === 'success') {
-                    displayResults(response);
+                    const durationSec = (performance.now() - startTime) / 1000;
+                    const sites = extractSitesFromArticlesHtml(response.html);
+                    displayResults(response, {
+                        query: "Recently Saved",
+                        sites: sites.length > 0 ? sites : ["Supabase Archive"],
+                        durationSec: durationSec
+                    });
                 } else {
                     alert(`Error: ${response.message}`);
                 }
@@ -1281,10 +1553,17 @@ document.addEventListener('DOMContentLoaded', function(): void {
             allSavedBtn.textContent = 'Requesting...';
             allSavedBtn.disabled = true;
 
+            const startTime = performance.now();
             try {
                 const response = await makeApiRequest_recent('/all-saved');
                 if (response.status === 'success') {
-                    displayResults(response);
+                    const durationSec = (performance.now() - startTime) / 1000;
+                    const sites = extractSitesFromArticlesHtml(response.html);
+                    displayResults(response, {
+                        query: "All Saved Articles",
+                        sites: sites.length > 0 ? sites : ["Supabase Archive"],
+                        durationSec: durationSec
+                    });
                 } else {
                     alert(`Error: ${response.message}`);
                 }
@@ -1304,12 +1583,6 @@ document.addEventListener('DOMContentLoaded', function(): void {
         databaseSearchForm.addEventListener('submit', async function(e: Event): Promise<void> {
             e.preventDefault();
             const values: SearchValuesDatabase = getDatabaseSearchValues();
-            
-            // // Validation
-            // if (!values.searchTerms.trim()) {
-            //     alert('Please enter search terms');
-            //     return;
-            // }
 
             if (values.websites.length === 0) {
                 alert('Please select at least one website');
@@ -1322,11 +1595,20 @@ document.addEventListener('DOMContentLoaded', function(): void {
             submitButton.textContent = 'Searching...';
             submitButton.disabled = true;
 
+            const startTime = performance.now();
+            const selectedSites = getCheckedSiteLabels('database-websites');
+            const searchTerms = values.searchTerms.trim() || values.keywords.trim() || 'All Database Articles';
+
             try {
                 // Make API request to backend
                 const response = await makeApiRequestDatabase('/search-database', values);
                 if (response.status === 'success') {
-                    displayResults(response);
+                    const durationSec = (performance.now() - startTime) / 1000;
+                    displayResults(response, {
+                        query: searchTerms,
+                        sites: selectedSites,
+                        durationSec: durationSec
+                    });
                 } else {
                     alert(`Error: ${response.message}`);
                 }
@@ -1338,6 +1620,28 @@ document.addEventListener('DOMContentLoaded', function(): void {
                 submitButton.textContent = originalText;
                 submitButton.disabled = false;
             }
+        });
+    }
+
+    // Workspace tab switcher (Live Scraper vs Supabase Database Archive)
+    const tabLiveScraper = document.getElementById('tabLiveScraper') as HTMLButtonElement | null;
+    const tabDatabaseArchive = document.getElementById('tabDatabaseArchive') as HTMLButtonElement | null;
+    const scraperCard = document.getElementById('scraper-card') as HTMLElement | null;
+    const databaseCard = document.getElementById('database-card') as HTMLElement | null;
+
+    if (tabLiveScraper && tabDatabaseArchive && scraperCard && databaseCard) {
+        tabLiveScraper.addEventListener('click', () => {
+            tabLiveScraper.classList.add('active');
+            tabDatabaseArchive.classList.remove('active');
+            scraperCard.style.display = 'flex';
+            databaseCard.style.display = 'none';
+        });
+
+        tabDatabaseArchive.addEventListener('click', () => {
+            tabDatabaseArchive.classList.add('active');
+            tabLiveScraper.classList.remove('active');
+            scraperCard.style.display = 'none';
+            databaseCard.style.display = 'flex';
         });
     }
 });

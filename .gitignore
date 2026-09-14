@@ -14,7 +14,6 @@ backend/.pytest_cache/
 # IDE & AI Assistant Local Data
 .vscode/
 .antigravity/
-.agents/
 # Scratch directory (optional)
 backend/scratch/
 
@@ -23,4 +22,6 @@ scratch/
 pyrefly.toml
 SYSTEM_SPEC_SHEET.md
 
-public_html/main.js
+public_html/app/main.js
+
+implementation_guides/

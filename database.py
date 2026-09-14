@@ -1,10 +1,11 @@
 from supabase import create_client, Client
 import os 
+import re
 from dotenv import load_dotenv
 from methods import website_urls
 import requests
 from bs4 import BeautifulSoup
-from search import extract_link_preview_metadata
+from search import extract_link_preview_metadata, is_safe_external_url
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -56,6 +57,13 @@ def get_all_saved():
         print(f"error: {e}")
         return 500
     
+def sanitize_postgrest_term(val: str) -> str:
+    """
+    Sanitizes user input to prevent PostgREST query injection.
+    Strips reserved characters that define PostgREST logical operators and delimiters.
+    """
+    return re.sub(r'[,():%"]', '', str(val)).strip()
+
 def search_for_articles(websites, search_terms, limit, keywords, urls, start_date, end_date): 
     try: 
         query = supabase.table("articles").select("content, url")
@@ -66,21 +74,29 @@ def search_for_articles(websites, search_terms, limit, keywords, urls, start_dat
         
         # url match (optional, exact)
         if urls: 
-            query = query.in_("url", urls)
+            # Only include valid URLs to prevent query pollution
+            clean_urls = [u.strip() for u in urls if u.strip().startswith(("http://", "https://"))]
+            if clean_urls:
+                query = query.in_("url", clean_urls)
 
         if search_terms: 
-            for term in search_terms: 
-                query = query.or_(f"title.ilike.%{term}%")
+            for term in search_terms:
+                clean_term = sanitize_postgrest_term(term)
+                if clean_term:
+                    query = query.or_(f"title.ilike.%{clean_term}%")
 
         if keywords: 
             for keyword in keywords: 
-                query = query.or_(f"content.ilike.%{keyword}%")
+                clean_kw = sanitize_postgrest_term(keyword)
+                if clean_kw:
+                    query = query.or_(f"content.ilike.%{clean_kw}%")
 
         if start_date != 0 and end_date != 0:
             query = query.gte("published_date", start_date).lte("published_date", end_date)
 
-        if limit != 0: 
-            query = query.limit(limit)
+        # Enforce defensive limit to prevent full-table dumps
+        query_limit = min(limit or 10, 50)
+        query = query.limit(query_limit)
 
         query = query.order("created_at", desc=True)
 
@@ -88,25 +104,6 @@ def search_for_articles(websites, search_terms, limit, keywords, urls, start_dat
         return ensure_preview_in_content(response.data)
     except Exception as e: 
         print(f"error {e}")
-        return 500
-    
-def populate_fields():
-    try:
-        response = (
-            supabase.table("articles")
-            .select("*")
-            .execute()
-        )
-        if (len(response.data) != 0):
-            migrated_data = ensure_preview_in_content(response.data)
-            for dict in migrated_data: 
-                input_tag = f"<input value='{dict['url']}' style='width: auto; transform: scale(1.5);' type='checkbox' name='articleCheckBox' />\n"
-                for_email_html = dict['content'].replace(input_tag, "")
-                email_dict[dict['url']] = for_email_html
-
-                json_dict[dict['url']] = {"website": dict['website'], "title": dict['title'], "author": dict['author'], "published": dict['published'], "keywords": dict['keywords'], "url": dict['url'], "content": dict['content']}           
-    except Exception as e:
-        print(f"error: {e}")
         return 500
 
 def ensure_preview_in_content(db_rows):
@@ -123,7 +120,8 @@ def ensure_preview_in_content(db_rows):
     for row in db_rows:
         content_html = row.get("content", "")
         url = row.get("url", "")
-        if not content_html or not url:
+        # Require a valid HTTP/HTTPS URL that does not resolve to private/local IPs (SSRF defense)
+        if not content_html or not url or not is_safe_external_url(url):
             continue
 
         # If it already has the link preview card, skip
