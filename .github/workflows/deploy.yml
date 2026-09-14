@@ -47,6 +47,7 @@ jobs:
             # 3. Remove .ts files and test directories from the server
             find . -type f -name "*.ts" -delete
             rm -rf tests/ test/ __tests__/
+            rm -rf .agents/
 
             # 4. Restart or reload PM2 process
             pm2 reload all || pm2 restart all
